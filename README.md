@@ -1,18 +1,18 @@
-# Provable.IO Core
+# Provable.IO Core Library
 
-This is a random number generator utility that uses various hashing functions, byte generation, and other utilities. The generator can produce both floating-point and integer numbers with configurable settings.
+This is a random number generator core library that uses various hashing functions, byte generation, and other utilities. The generator can produce both floating-point and integer numbers with configurable settings.
 
 ## Installation
 
 1. Clone the repository or download the source code.
-2. Install the dependencies by running `npm install` in the project directory.
+2. Install the dependencies by running `yarn install` in the project directory.
 
 ## Usage
 
 Import the generator function in your project:
 
 ```javascript
-const Provable = require("./provable.js");
+const Provable = require("@provableio/provable-core");
 ```
 
 Create an instance of the generator with your desired configuration:
