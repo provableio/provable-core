@@ -12,17 +12,21 @@
   },
   "scripts": {
     "test": "node test.js",
-    "release": "yarn build && git commit -am $npm_package_version && git tag $npm_package_version && git push && git push --tags && npm publish"
+    "release": "yarn test && git commit -am $npm_package_version && git tag $npm_package_version && git push && git push --tags && npm publish"
   },
   "repository": {
     "type": "git",
     "url": "git@github.com:provableio/provable-core.git"
   },
   "keywords": [
+    "rng",
     "provable",
     "random",
     "reproducable",
-    "fair"
+    "fair",
+    "hash",
+    "chain",
+    "series"
   ],
   "author": "tacyarg <jdent@tacyarg.com>",
   "license": "MIT",
