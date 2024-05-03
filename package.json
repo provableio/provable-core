@@ -9,5 +9,22 @@
   },
   "devDependencies": {
     "tape": "^5.0.1"
-  }
+  },
+  "scripts": {
+    "test": "node test.js",
+    "release": "yarn build && git commit -am $npm_package_version && git tag $npm_package_version && git push && git push --tags && npm publish"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:provableio/provable-core.git"
+  },
+  "keywords": [
+    "provable",
+    "random",
+    "reproducable",
+    "fair"
+  ],
+  "author": "tacyarg <repos@provable.io>",
+  "license": "MIT",
+  "homepage": "https://provable.io"
 }
