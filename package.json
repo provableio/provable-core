@@ -1,0 +1,13 @@
+{
+  "name": "@provableio/provable-core",
+  "packageManager": "yarn@3.3.0",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "tape": "^5.0.1"
+  }
+}
