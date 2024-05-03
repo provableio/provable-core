@@ -26,10 +26,7 @@ const config = {
   cursor: 0,
 }
 
-const generator = Provable(
-	(state) => { /* do somthing */ },
-	config
-);
+const generator = Provable((x) => console.log(x))(config);
 ```
 The `config` object contains the following properties:
 - `serverSeed` (string): The server seed used for generating random numbers.
@@ -75,8 +72,8 @@ The generator's configuration is updated after generating the random numbers, an
 Generates `count` number of random integer numbers within the range of `min` and `max` (inclusive) using the configured generator. The `count`, `max`, and `min` arguments are optional and default to `1`, `100`, and `0`, respectively.
 
 ```javascript
-const randomInts = generator.ints(10, 50, -25);
-console.log(randomInts); // [-25, -24, -23, -22, -21, -20, -19, -18, -17, -16]
+const randomInts = generator.ints(10, 100, 0);
+console.log(randomInts); // [100, 25, 23, 22, 21, 20, 19, 18, 17, 16]
 ```
 
 The generator's configuration is updated after generating the random numbers, and the `nonce` value is incremented. If an `emit` callback function is provided, it will be called with the updated configuration.
