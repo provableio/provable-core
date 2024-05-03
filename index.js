@@ -1,2 +1,6 @@
-module.exports = require("./provable.js");
-module.exports.utils = require("./utils.js");
+module.exports = {
+	Provable: require("./provable.js"),
+	HashSeries: require("./hashSeries.js"),
+	HashChain: require("./hashChain.js"),
+	utils: require("./utils.js")
+}
