@@ -2,32 +2,37 @@
 
 This is a random number generator core library that uses various hashing functions, byte generation, and other utilities. The generator can produce both floating-point and integer numbers with configurable settings.
 
-## Installation
-
-1. Clone the repository or download the source code.
-2. Install the dependencies by running `yarn install` in the project directory.
-
-## Usage
-
-Import the generator function in your project:
+## Example
 
 ```javascript
-const { Provable, HashChain, HashSeries, utils } = require("@provableio/provable-core");
-```
-
-Create an instance of the generator with your desired configuration:
-
-```javascript
+const {
+  Provable,
+  HashChain,
+  HashSeries,
+  utils,
+} = require("@provableio/provable-core");
 
 const config = {
   serverSeed: "your-server-seed",
   clientSeed: "your-client-seed",
   nonce: 0,
   cursor: 0,
-}
+};
 
-const generator = Provable((x) => console.log(x))(config);
+const generator = Provable((x) => {
+  // update database?
+  console.log(x)
+})(config);
+
+// Generate 5 Floating point outcomes
+const randomFloats = generator.floats(5);
+console.log("floats:", randomFloats);
+
+// generate 10 outcomes between 0 - 100
+const randomInts = generator.ints(10, 100, 0);
+console.log("ints:", randomInts);
 ```
+
 The `config` object contains the following properties:
 - `serverSeed` (string): The server seed used for generating random numbers.
 - `clientSeed` (string): The client seed used for generating random numbers.
