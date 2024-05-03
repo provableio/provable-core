@@ -48,23 +48,6 @@ const defaultState = defaults({});
 console.log(defaultState); // { serverSeed: sha256(), clientSeed: md5(), nonce: 0, cursor: 0, serverHash: sha256(serverSeed) }
 ```
 
-### HashSeries({ seed, salt, nonce })
-
-This class is used to generate a series of hashes based on the provided `seed`, `salt`, and `nonce` values. It has the following methods:
-
-- `getHash()`: Returns the current hash value.
-- `next()`: Increments the `nonce` value and returns a new object with the updated `seed`, `salt`, and `nonce`.
-- `peekHash()`: Returns the next hash value based on the updated `nonce` value.
-- `calcHash(_seed, _salt, _nonce)`: Calculates the hash value using the provided `seed`, `salt`, and `nonce` values.
-- `state()`: Returns an object containing the `seed`, `salt`, and `nonce` values.
-
-```javascript
-const hashSeries = new HashSeries({ seed: "your-seed", salt: "your-salt", nonce: 0 });
-console.log(hashSeries.getHash()); // Generated hash value
-console.log(hashSeries.next()); // { seed: "your-seed", salt: "your-salt", nonce: 1 }
-console.log(hashSeries.peekHash()); // Generated hash value based on nonce + 1
-```
-
 ### sha256(input)
 
 This function generates a SHA-256 hash value for the provided `input` string. If no `input` is provided, it will generate a hash value for a UUID.
@@ -139,6 +122,42 @@ This function generates an array of `count` number of random integer numbers wit
 ```javascript
 const randomInts = ints(byteGenerator, 10, 50, -25);
 console.log(randomInts); // Generated array of integer numbers
+```
+
+### HashSeries({ seed, salt, nonce })
+
+This class is used to generate a series of hashes based on the provided `seed`, `salt`, and `nonce` values. It has the following methods:
+
+- `getHash()`: Returns the current hash value.
+- `next()`: Increments the `nonce` value and returns a new object with the updated `seed`, `salt`, and `nonce`.
+- `peekHash()`: Returns the next hash value based on the updated `nonce` value.
+- `calcHash(_seed, _salt, _nonce)`: Calculates the hash value using the provided `seed`, `salt`, and `nonce` values.
+- `state()`: Returns an object containing the `seed`, `salt`, and `nonce` values.
+
+```javascript
+const hashSeries = new HashSeries({ seed: "your-seed", salt: "your-salt", nonce: 0 });
+console.log(hashSeries.getHash()); // Generated hash value
+console.log(hashSeries.next()); // { seed: "your-seed", salt: "your-salt", nonce: 1 }
+console.log(hashSeries.peekHash()); // Generated hash value based on nonce + 1
+```
+
+### HashChain({ seed, count, index })
+
+This class is used to manage generating and iterating through a provable hash chain. It has the following methods:
+
+- `state()`: Returns an object containing the `count`, `seed`, and `index` values.
+- `peek()`: Returns the next hash value in the chain based on the current `index`.
+- `get()`: Returns the current hash value in the chain based on the current `index`.
+- `next()`: Returns an object containing the next hash value in the chain, the `count`, and the updated `index`.
+- `last()`: Returns the previous hash value in the chain based on the current `index`.
+
+```javascript
+const hashChain = new HashChain({ seed: "your-seed", count: 10 });
+console.log(hashChain.state()); // Generated state object
+console.log(hashChain.peek()); // Generated next hash value in the chain
+console.log(hashChain.get()); // Generated current hash value in the chain
+console.log(hashChain.next()); // Generated next hash value in the chain, count, and updated index
+console.log(hashChain.last()); // Generated previous hash value in the chain
 ```
 
 ## License

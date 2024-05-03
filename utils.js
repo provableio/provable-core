@@ -1,3 +1,4 @@
+const assert = require('assert')
 const { v4: uuid } = require("uuid");
 const lodash = require("lodash");
 const crypto = require("crypto");
@@ -11,38 +12,6 @@ function defaults(state = {}) {
   });
   state.serverHash = state.serverHash || sha256(state.serverSeed);
   return state;
-}
-
-function HashSeries({ seed = uuid(), salt = uuid(), nonce = 0 } = {}) {
-  function calcHash(_seed = seed, _salt = salt, _nonce = nonce) {
-    return crypto
-      .createHmac("sha256", _seed)
-      .update(`${_salt}:${_nonce}`)
-      .digest("hex");
-  }
-  function getHash() {
-    return calcHash(seed, salt, nonce);
-  }
-  function state() {
-    return { seed, salt, nonce };
-  }
-  function next() {
-    return {
-      seed,
-      salt,
-      nonce: nonce + 1,
-    };
-  }
-  function peekHash() {
-    return calcHash(seed, salt, nonce + 1);
-  }
-  return {
-    getHash,
-    next,
-    peekHash,
-    calcHash,
-    state,
-  };
 }
 
 function sha256(input = uuid()) {
@@ -116,6 +85,99 @@ function ints(rng, count, max, min) {
   return result;
 }
 
+function HashSeries({ seed = uuid(), salt = uuid(), nonce = 0 } = {}) {
+  function calcHash(_seed = seed, _salt = salt, _nonce = nonce) {
+    return crypto
+      .createHmac("sha256", _seed)
+      .update(`${_salt}:${_nonce}`)
+      .digest("hex");
+  }
+  function getHash() {
+    return calcHash(seed, salt, nonce);
+  }
+  function state() {
+    return { seed, salt, nonce };
+  }
+  function next() {
+    return {
+      seed,
+      salt,
+      nonce: nonce + 1,
+    };
+  }
+  function peekHash() {
+    return calcHash(seed, salt, nonce + 1);
+  }
+  return {
+    getHash,
+    next,
+    peekHash,
+    calcHash,
+    state,
+  };
+}
+
+// generate a provable hash chain count to -1
+function generateHashChain(count, seed) {
+  assert(seed, "requires seed");
+  assert(seed, "requires count");
+
+  var result = Array(count);
+
+  // generate chain in revese order
+  for (var i = count - 1; i >= 0; i--) {
+    seed = sha256(seed);
+    result[i] = seed;
+  }
+
+  return result;
+}
+
+// manages generating and itteratng through a provable hashchain
+// the last hash of the previous chain will be used to generate the next.
+function HashChain({ seed = uuid(), count = 1000000, index = 0 }) {
+  assert(count >= 1, "requires count");
+  assert(seed, "requires seed");
+
+  const chain = generateHashChain(count, seed);
+
+  function state() {
+    return { count, seed, index };
+  }
+
+  function peek() {
+    return chain[index + 1];
+  }
+
+  function get() {
+    return chain[index];
+  }
+
+  function next() {
+    const hash = peek();
+    assert(hash, 'chain has ended')
+
+    // increment index and return hash
+    return {
+      hash,
+      count,
+      index: ++index,
+    };
+  }
+
+  function last() {
+    return chain[index - 1];
+  }
+
+  return {
+    state,
+    peek,
+    get,
+    next,
+    last,
+  };
+}
+
 module.exports = {
   floats,
   bytesToFloat,
@@ -127,4 +189,5 @@ module.exports = {
   floatToInt,
   defaults,
   HashSeries,
+  HashChain,
 };
