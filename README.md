@@ -2,6 +2,16 @@
 
 This is a random number generator core library that uses various hashing functions, byte generation, and other utilities. The generator can produce both floating-point and integer numbers with configurable settings.
 
+## Install
+
+```
+yarn add @provableio/provable-core
+
+OR
+
+npm install @provableio/provable-core
+```
+
 ## Example
 
 ```javascript
