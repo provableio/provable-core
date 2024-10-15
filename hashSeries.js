@@ -24,7 +24,7 @@ function HashSeries({ seed = uuid(), salt = uuid(), nonce = 0 } = {}) {
   function peekHash() {
     return calcHash(seed, salt, nonce + 1);
   }
-  
+
   return {
     getHash,
     next,
@@ -34,4 +34,4 @@ function HashSeries({ seed = uuid(), salt = uuid(), nonce = 0 } = {}) {
   };
 }
 
-module.exports = HashSeries
+module.exports = HashSeries;

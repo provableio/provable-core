@@ -94,4 +94,4 @@ module.exports = {
   FloatGenerator,
   floatToInt,
   defaults,
- };
+};

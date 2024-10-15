@@ -1,11 +1,11 @@
 const test = require("tape");
-const { Provable, HashChain, HashSeries} = require("./index");
+const { Provable, HashChain, HashSeries } = require("./index");
 
 console.log({
   Provable,
   HashChain,
-  HashSeries
-})
+  HashSeries,
+});
 
 let config = {
   clientSeed: "bba625387fb64d772ff7da0ed6e71b16",

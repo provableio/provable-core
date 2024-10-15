@@ -1,3 +1,4 @@
+const assert = require("assert");
 const {
   md5,
   sha256,
@@ -25,19 +26,31 @@ module.exports =
         return config;
       },
       floats(count = 1) {
-        const result = floats(generator, count);
         ++config.nonce;
+        assert(
+          Number.MAX_SAFE_INTEGER === config.nonce,
+          "max int, rotate seed."
+        );
+        const result = floats(generator, count);
         emit(config);
         return result;
       },
       ints(count, max, min) {
-        const result = ints(generator, count, max, min);
         ++config.nonce;
+        assert(
+          Number.MAX_SAFE_INTEGER === config.nonce,
+          "max int, rotate seed."
+        );
+        const result = ints(generator, count, max, min);
         emit(config);
         return result;
       },
       tick() {
         ++config.nonce;
+        assert(
+          Number.MAX_SAFE_INTEGER === config.nonce,
+          "max int, rotate seed."
+        );
         emit(config);
         return config;
       },
