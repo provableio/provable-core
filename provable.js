@@ -28,8 +28,8 @@ module.exports =
       floats(count = 1) {
         ++config.nonce;
         assert(
-          Number.MAX_SAFE_INTEGER === config.nonce,
-          "max int, rotate seed."
+          Number.MAX_SAFE_INTEGER !== config.nonce,
+          "max nonce, rotate seed."
         );
         const result = floats(generator, count);
         emit(config);
@@ -38,8 +38,8 @@ module.exports =
       ints(count, max, min) {
         ++config.nonce;
         assert(
-          Number.MAX_SAFE_INTEGER === config.nonce,
-          "max int, rotate seed."
+          Number.MAX_SAFE_INTEGER !== config.nonce,
+          "max nonce, rotate seed."
         );
         const result = ints(generator, count, max, min);
         emit(config);
@@ -48,8 +48,8 @@ module.exports =
       tick() {
         ++config.nonce;
         assert(
-          Number.MAX_SAFE_INTEGER === config.nonce,
-          "max int, rotate seed."
+          Number.MAX_SAFE_INTEGER !== config.nonce,
+          "max nonce, rotate seed."
         );
         emit(config);
         return config;
