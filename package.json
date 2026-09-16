@@ -2,11 +2,19 @@
   "name": "@provableio/provable-core",
   "packageManager": "yarn@3.3.0",
   "version": "1.0.1",
+  "description": "Provably fair random number generation: HMAC-SHA256 byte streams, hash chains and hash series.",
   "main": "index.js",
-  "dependencies": {
-    "lodash": "^4.17.21",
-    "uuid": "^9.0.1"
+  "files": [
+    "index.js",
+    "provable.js",
+    "hashChain.js",
+    "hashSeries.js",
+    "utils.js"
+  ],
+  "engines": {
+    "node": ">=14.17.0"
   },
+  "dependencies": {},
   "devDependencies": {
     "tape": "^5.0.1"
   },
@@ -21,8 +29,9 @@
   "keywords": [
     "rng",
     "provable",
+    "provably-fair",
     "random",
-    "reproducable",
+    "reproducible",
     "fair",
     "hash",
     "chain",
