@@ -206,6 +206,33 @@ utils.floats(rng, 2);      // two floats from the start of the stream
 utils.ints(rng, 3, 6, 1);  // three dice rolls from the bytes that follow
 ```
 
+## Versioning and releases
+
+The package follows [semver](https://semver.org). Because its purpose is
+reproducibility, the rules are stricter than usual:
+
+- **Major**: any change to the bytes, floats or integers produced for a given
+  input, any tightening of accepted input, or a higher Node.js requirement.
+- **Minor**: new functions or options that leave existing outputs untouched.
+- **Patch**: documentation, tests, tooling, internal refactors with identical
+  outputs.
+
+Every change goes under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) with the
+pull request that made it.
+
+To release, from an up-to-date `master`:
+
+```
+npm version patch   # or minor / major
+```
+
+That runs the tests, moves `Unreleased` under the new version with today's
+date, commits, tags `vX.Y.Z` and pushes. The
+[publish workflow](.github/workflows/publish.yml) then verifies the tag
+against `package.json`, publishes to npm with provenance and creates the
+GitHub release from the changelog entry. It needs an `NPM_TOKEN` repository
+secret; nothing is published from a laptop.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
