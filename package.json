@@ -1,7 +1,7 @@
 {
   "name": "@provableio/provable-core",
   "packageManager": "yarn@3.3.0",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Provably fair random number generation: HMAC-SHA256 byte streams, hash chains and hash series.",
   "main": "index.js",
   "files": [
