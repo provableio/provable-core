@@ -1,0 +1,47 @@
+name: Publish
+
+# Cut a release with `npm version patch|minor|major` on master. That runs the
+# tests, dates the CHANGELOG entry, commits, tags `vX.Y.Z` and pushes. This
+# workflow then publishes to npm with provenance and creates the GitHub release.
+#
+# Needs one repository secret: NPM_TOKEN, a granular npm access token with
+# read/write on @provableio/provable-core and bypass 2FA for automation.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn test
+
+      - name: Tag must match package.json
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          test "$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != package.json $version"; exit 1; }
+
+      - name: Release notes from CHANGELOG.md
+        run: node scripts/release-changelog.js notes "$GITHUB_REF_NAME" > release-notes.md
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: GitHub release
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}
