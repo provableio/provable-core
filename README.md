@@ -229,9 +229,10 @@ npm version patch   # or minor / major
 That runs the tests, moves `Unreleased` under the new version with today's
 date, commits, tags `vX.Y.Z` and pushes. The
 [publish workflow](.github/workflows/publish.yml) then verifies the tag
-against `package.json`, publishes to npm with provenance and creates the
-GitHub release from the changelog entry. It needs an `NPM_TOKEN` repository
-secret; nothing is published from a laptop.
+against `package.json`, publishes to npm and creates the GitHub release from
+the changelog entry. npm trusts that workflow directly (trusted publishing over
+GitHub's OIDC token), so there is no npm token to store and every release
+carries provenance. Nothing is published from a laptop.
 
 ## License
 

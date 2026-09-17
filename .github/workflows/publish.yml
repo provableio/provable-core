@@ -4,8 +4,10 @@ name: Publish
 # tests, dates the CHANGELOG entry, commits, tags `vX.Y.Z` and pushes. This
 # workflow then publishes to npm with provenance and creates the GitHub release.
 #
-# Needs one repository secret: NPM_TOKEN, a granular npm access token with
-# read/write on @provableio/provable-core and bypass 2FA for automation.
+# Publishing uses npm trusted publishing: the package on npmjs.com trusts this
+# workflow file in this repository via GitHub's OIDC token (id-token: write),
+# so there is no npm token to store or rotate. Provenance is attached
+# automatically.
 
 on:
   push:
@@ -37,9 +39,7 @@ jobs:
         run: node scripts/release-changelog.js notes "$GITHUB_REF_NAME" > release-notes.md
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
       - name: GitHub release
         run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
