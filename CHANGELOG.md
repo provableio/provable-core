@@ -16,9 +16,10 @@ requires a major version**, however small it looks.
   `min + floor(u * max / 2^32)` (Lemire), identical to the old float mapping
   for accepted values, but rejects the `2^32 mod max` values that made some
   results one draw more likely and reads the next 4 bytes instead. Ranges that
-  divide 2^32 (and in practice nearly all small ranges) give the same numbers
-  as 2.x; a draw only changes when it hits a rejected value (for example 24 of
-  60,000 five-int draws at `max = 1e6`, about 10% at `max = 1e9`).
+  divide 2^32 give the same numbers as 2.x, and so does every other draw
+  that isn't rejected. The rejected share per integer is `(2^32 mod max) / 2^32`:
+  about 1 in a billion for `max = 6`, 0.0225% for `max = 1e6`, 6.9% for
+  `max = 1e9`, 30% for `max = 3e9`.
 - `max` above 2^32 now throws. It used to return only multiples of
   `2^(bits above 32)`.
 
