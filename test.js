@@ -84,6 +84,25 @@ test("provable", (t) => {
     t.end();
   });
 
+  t.test("ints reject biased u32 values instead of skewing the result", (t) => {
+    const bytes = (list) => list[Symbol.iterator]();
+    // max 3: 2^32 % 3 = 1, so only u = 0 (high product bits 0, low bits 0) is rejected.
+    t.deepEqual(utils.ints(bytes([0, 0, 0, 0, 255, 255, 255, 255]), 1, 3, 0), [2], "u=0 redrawn");
+    t.deepEqual(utils.ints(bytes([0, 0, 0, 1]), 1, 3, 0), [0], "u=1 accepted");
+    // Accepted draws match the float mapping exactly.
+    // max 1000: u = 2^31 lands on a biased slot (low bits 0 < 2^32 % 1000) and is redrawn.
+    t.deepEqual(utils.ints(bytes([128, 0, 0, 0, 0, 0, 0, 1]), 1, 1000, 5), [5], "u=2^31 redrawn");
+    for (const u of [1, 2 ** 31 + 1, 2 ** 32 - 1, 123456789]) {
+      const b = [u >>> 24, (u >>> 16) & 255, (u >>> 8) & 255, u & 255];
+      t.equal(utils.ints(bytes(b), 1, 1000, 5)[0], utils.floatToInt(utils.bytesToFloat(b), 1000, 5));
+    }
+    // A power-of-two range never rejects and reaches every value.
+    t.deepEqual(utils.ints(bytes([255, 255, 255, 255]), 1, 2 ** 32, 0), [2 ** 32 - 1]);
+    t.throws(() => Provable()(base).ints(1, 2 ** 32 + 1), /max/);
+    t.throws(() => utils.ints(bytes([0, 0, 0, 0]), 1, 2 ** 40, 0), /max/);
+    t.end();
+  });
+
   t.test("cursor offsets the byte stream", (t) => {
     t.deepEqual(Provable()({ ...base, cursor: 4 }).ints(1, 10001, 0), [632]);
     t.deepEqual(Provable()({ ...base, cursor: 32 }).ints(1, 10001, 0), Provable()(base).ints(9, 10001, 0).slice(8));

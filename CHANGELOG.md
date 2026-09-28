@@ -10,6 +10,23 @@ requires a major version**, however small it looks.
 
 ## [Unreleased]
 
+### Breaking
+
+- `ints()` is unbiased. Each draw reads 4 bytes as a big-endian u32 and returns
+  `min + floor(u * max / 2^32)` (Lemire), identical to the old float mapping
+  for accepted values, but rejects the `2^32 mod max` values that made some
+  results one draw more likely and reads the next 4 bytes instead. Ranges that
+  divide 2^32 (and in practice nearly all small ranges) give the same numbers
+  as 2.x; a draw only changes when it hits a rejected value (for example 24 of
+  60,000 five-int draws at `max = 1e6`, about 10% at `max = 1e9`).
+- `max` above 2^32 now throws. It used to return only multiples of
+  `2^(bits above 32)`.
+
+### Unchanged
+
+- `ByteGenerator`, `floats()`, `bytesToFloat` and `floatToInt` produce the
+  same values as 2.x.
+
 ## [2.0.0] - 2026-09-17
 
 ### Breaking

@@ -88,6 +88,7 @@ function bytesToFloat(bytes) {
 
 // Maps a float in [0, 1) onto the `max` integers starting at `min`, i.e. the
 // range [min, min + max - 1]. `max` is a range size, not an upper bound.
+// Slightly biased when `max` does not divide 2^32; `ints` is the unbiased form.
 function floatToInt(val, max, min = 0) {
   return Math.floor(min + val * max);
 }
@@ -106,11 +107,24 @@ function floats(rng, count) {
   return [...FloatGenerator(rng, count)];
 }
 
+const TWO_32 = 2 ** 32;
+
+// Unbiased integers in [min, min + max - 1] (Lemire's multiply-shift with
+// rejection). Each draw reads 4 bytes as a big-endian u32 and takes the high
+// 32 bits of u * max, which equals floatToInt(bytesToFloat(bytes), max, min).
+// The few u32 values that would over-represent some results are rejected and
+// the next 4 bytes are drawn instead, so every result is exactly equally likely.
 function ints(rng, count, max, min = 0) {
+  assert(Number.isSafeInteger(max) && max >= 1 && max <= TWO_32, "max must be 1 to 2^32");
+  const range = BigInt(max);
+  const threshold = BigInt(TWO_32 % max);
   const result = [];
-  const gen = FloatGenerator(rng, count);
-  for (let i = 0; i < count; i++) {
-    result.push(floatToInt(gen.next().value, max, min));
+  while (result.length < count) {
+    let u = 0n;
+    for (let j = 0; j < BYTES_PER_FLOAT; j++) u = (u << 8n) | BigInt(rng.next().value);
+    const m = u * range;
+    if ((m & 0xffffffffn) < threshold) continue; // biased slot: draw again
+    result.push(min + Number(m >> 32n));
   }
   return result;
 }
