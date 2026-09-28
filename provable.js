@@ -61,6 +61,7 @@ module.exports =
       ints(count, max, min = 0) {
         count = positiveInteger(count, "count");
         max = positiveInteger(max, "max");
+        assert(max <= 2 ** 32, "max must be 2^32 or less");
         min = toInteger(min, "min");
         return draw((rng) => ints(rng, count, max, min));
       },

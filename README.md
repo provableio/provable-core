@@ -48,9 +48,11 @@ For a draw with nonce `N`:
 2. Bytes are consumed four at a time. Each group becomes a float:
    `b0/256 + b1/256^2 + b2/256^3 + b3/256^4`, a value in `[0, 1)` with 32 bits
    of precision.
-3. `ints(count, max, min)` maps each float to `floor(min + float * max)`, an
-   integer in `[min, min + max - 1]`. **`max` is the size of the range, not an
-   upper bound.**
+3. `ints(count, max, min)` reads each 4 bytes as a big-endian u32 `u` and
+   returns `min + floor(u * max / 2^32)`, an integer in `[min, min + max - 1]`.
+   If `(u * max) mod 2^32 < 2^32 mod max` the value is rejected and the next 4
+   bytes are read instead, so every integer is exactly equally likely.
+   **`max` is the size of the range, not an upper bound**, and at most 2^32.
 4. After the draw the nonce becomes `N + 1` and the new state is emitted.
 
 Every draw uses the nonce as it stands and then advances it, so the outcome
@@ -194,9 +196,12 @@ const { utils } = require("@provableio/provable-core");
   yielding the HMAC byte stream for a fixed nonce. Call it, do not `new` it.
 - `FloatGenerator(rng, count)`: generator function turning four bytes at a time
   from `rng` into floats.
-- `floats(rng, count)`, `ints(rng, count, max, min = 0)`: array forms of the above.
-- `bytesToFloat([b0, b1, b2, b3])`, `floatToInt(float, max, min = 0)`: the two
-  conversions described in "How outcomes are generated".
+- `floats(rng, count)`: array form of the above.
+- `ints(rng, count, max, min = 0)`: unbiased integers as described in "How
+  outcomes are generated" (may read more than `4 * count` bytes).
+- `bytesToFloat([b0, b1, b2, b3])`: four bytes to a float in `[0, 1)`.
+- `floatToInt(float, max, min = 0)`: the plain float-to-int mapping, kept for
+  2.x replays; slightly biased when `max` does not divide 2^32.
 - `toInteger(value, name)`, `assertSeed(value, name)`: the validators used
   throughout.
 
