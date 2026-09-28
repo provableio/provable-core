@@ -10,6 +10,8 @@ requires a major version**, however small it looks.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-09-28
+
 ### Breaking
 
 - `ints()` is unbiased. Each draw reads 4 bytes as a big-endian u32 and returns
@@ -94,7 +96,8 @@ requires a major version**, however small it looks.
 
 - `Provable`, `HashSeries`, `HashChain` and `utils`.
 
-[Unreleased]: https://github.com/provableio/provable-core/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/provableio/provable-core/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/provableio/provable-core/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/provableio/provable-core/compare/v1.0.1...v2.0.0
 [1.0.1]: https://github.com/provableio/provable-core/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/provableio/provable-core/releases/tag/v1.0.0
