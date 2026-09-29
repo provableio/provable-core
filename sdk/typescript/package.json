@@ -1,0 +1,65 @@
+{
+  "name": "@provableio/sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for the Provable.io provably-fair random number API. Generated from the public OpenAPI spec.",
+  "keywords": [
+    "provable",
+    "provable.io",
+    "random",
+    "rng",
+    "commit-reveal",
+    "merkle",
+    "openapi",
+    "sdk"
+  ],
+  "homepage": "https://provable.io/api-docs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/provableio/provable-core.git",
+    "directory": "sdk/typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/provableio/provable-core/issues"
+  },
+  "license": "Apache-2.0",
+  "author": "Provable.io <support@provable.io>",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/openapi-types.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "generate": "openapi-typescript ../openapi.json -o ./src/openapi-types.ts",
+    "build": "npm run generate && tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.0.0",
+    "typescript": "^5.4.0"
+  },
+  "overrides": {
+    "brace-expansion": "2.1.4",
+    "js-yaml": "4.3.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

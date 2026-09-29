@@ -1,0 +1,3413 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Provable.io Random Generator API",
+    "description": "Cryptographically verifiable random number generation. Generate random floats and integers, verify outcomes, and list per-seed history. Every endpoint is callable anonymously (rate-limited by IP); authenticated calls are attributed to your account for usage tracking, daily quotas, and webhook delivery.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Provable.io Support",
+      "email": "support@provable.io",
+      "url": "https://provable.io"
+    },
+    "license": {
+      "name": "Proprietary",
+      "url": "https://provable.io/terms"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.provable.io",
+      "description": "Production — the single base URL for all traffic. There is no separate sandbox host: test mode is selected per request by authenticating with a `pk_test_…` API key (deterministic outcomes, excluded from usage stats, no webhooks), while `pk_live_…` keys and anonymous calls hit live randomness on the same host."
+    }
+  ],
+  "externalDocs": {
+    "description": "Human-readable API reference",
+    "url": "https://provable.io/api-docs"
+  },
+  "tags": [
+    {
+      "name": "Random",
+      "description": "Generate random values"
+    },
+    {
+      "name": "Verification",
+      "description": "Verify and look up past outcomes"
+    },
+    {
+      "name": "Transparency",
+      "description": "Daily Merkle roots and inclusion proofs over all outcomes"
+    },
+    {
+      "name": "System",
+      "description": "Service health"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    },
+    {
+      "BearerAuth": []
+    },
+    {}
+  ],
+  "paths": {
+    "/api/batch": {
+      "post": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Run many draws in one round trip",
+        "description": "Accepts up to 50 independent draws across any of the random-generating endpoints (`floats`, `ints`, `shuffle`, `pick`, `bytes`, `dice`, `gaussian`) and returns one result per draw in the same order.\n\n- Each draw uses its own `clientSeed`/`cursor`/`nonce`, so any single outcome is independently verifiable via `/api/verifyServerHash` and gets its own `shortId`/`permalink`.\n- A failing draw is reported as `{ ok: false, error }` and does **not** abort the batch — successful draws still persist their outcomes.\n- Authenticated calls bump usage counters once per **successful** draw. If the daily quota is reached mid-batch, the remaining draws short-circuit with `{ ok: false, error: \"…\", code: \"quota_exceeded\" }` instead of running.\n- One `Idempotency-Key` covers the whole batch: a retry with the same key replays the identical `results` array and does not re-run any draw.",
+        "operationId": "batchDraw",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              },
+              "example": {
+                "draws": [
+                  {
+                    "endpoint": "ints",
+                    "params": {
+                      "clientSeed": "chest-1",
+                      "count": 1,
+                      "min": 1,
+                      "max": 100
+                    }
+                  },
+                  {
+                    "endpoint": "ints",
+                    "params": {
+                      "clientSeed": "chest-2",
+                      "count": 1,
+                      "min": 1,
+                      "max": 100
+                    }
+                  },
+                  {
+                    "endpoint": "pick",
+                    "params": {
+                      "clientSeed": "loot-3",
+                      "items": [
+                        "common",
+                        "rare",
+                        "legendary"
+                      ],
+                      "weights": [
+                        70,
+                        25,
+                        5
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One result per draw, in request order.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResponse"
+                },
+                "example": {
+                  "results": [
+                    {
+                      "ok": true,
+                      "outcome": {
+                        "outcome": [
+                          42
+                        ],
+                        "clientSeed": "chest-1",
+                        "serverHash": "9f86d081884c7d65...",
+                        "nonce": 0,
+                        "cursor": 0,
+                        "count": 1,
+                        "min": 1,
+                        "max": 100,
+                        "endpoint": "ints",
+                        "created": 1716566400000,
+                        "shortId": "k7Qm2A9bXz",
+                        "permalink": "https://provable.io/o/k7Qm2A9bXz"
+                      }
+                    },
+                    {
+                      "ok": true,
+                      "outcome": {
+                        "outcome": [
+                          73
+                        ],
+                        "clientSeed": "chest-2",
+                        "serverHash": "5e3b...",
+                        "nonce": 0,
+                        "cursor": 0,
+                        "count": 1,
+                        "min": 1,
+                        "max": 100,
+                        "endpoint": "ints",
+                        "created": 1716566400000,
+                        "shortId": "9aB2c3D4eF",
+                        "permalink": "https://provable.io/o/9aB2c3D4eF"
+                      }
+                    },
+                    {
+                      "ok": true,
+                      "outcome": {
+                        "outcome": "legendary",
+                        "index": 2,
+                        "clientSeed": "loot-3",
+                        "serverHash": "0a1b...",
+                        "nonce": 0,
+                        "cursor": 0,
+                        "count": 1,
+                        "weights": [
+                          70,
+                          25,
+                          5
+                        ],
+                        "endpoint": "pick",
+                        "created": 1716566400000,
+                        "shortId": "P9q8R7s6T5",
+                        "permalink": "https://provable.io/o/P9q8R7s6T5"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/bytes": {
+      "get": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Generate random bytes",
+        "description": "Return `count` random bytes encoded as `hex` (default) or `base64`. Useful for tokens, salts, and key material.",
+        "operationId": "getBytes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "description": "Number of bytes to generate (1-1024).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1024,
+              "default": 32
+            }
+          },
+          {
+            "name": "encoding",
+            "in": "query",
+            "description": "Output encoding.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hex",
+                "base64"
+              ],
+              "default": "hex"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An encoded byte string and the associated server hash.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BytesOutcome"
+                },
+                "example": {
+                  "outcome": "3f0a8b7d1c4e6f209a8c5b4d2e1f0a8b",
+                  "clientSeed": "my-app",
+                  "serverHash": "9f86d081884c7d65...",
+                  "nonce": 0,
+                  "cursor": 0,
+                  "count": 16,
+                  "encoding": "hex",
+                  "endpoint": "bytes",
+                  "created": 1716566400000
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/commit": {
+      "post": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Commit a server seed (commit-reveal step 1)",
+        "description": "Stronger fairness guarantee than `/api/floats` and `/api/ints`. The server generates a fresh `serverSeed`, publishes its `serverHash`, and holds the seed secret until you reveal. Because the hash is published *before* you submit your `clientSeed`, the server cannot pick its seed in response to yours. Follow with `POST /api/reveal` within the commit's TTL (default 10 minutes).",
+        "operationId": "createCommit",
+        "responses": {
+          "200": {
+            "description": "A new commit. Save `commitId` and `serverHash` for verification, then call `/api/reveal`.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Commit"
+                },
+                "example": {
+                  "commitId": "8c3d7b9e-1f2a-4c5d-9e8f-7a6b5c4d3e2f",
+                  "serverHash": "9f86d081884c7d65...",
+                  "expiresAt": 1716567000000
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/dice": {
+      "get": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Roll dice",
+        "description": "Roll dice using standard tabletop notation. Returns the individual rolls, the modifier, and the total.",
+        "operationId": "rollDice",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "name": "notation",
+            "in": "query",
+            "description": "Dice notation `NdM`, `NdM+K`, or `NdM-K`. N: 1-100 dice. M: 2-1,000,000 sides. K: integer modifier added to the total. Examples: `3d6`, `2d20+5`, `1d100-10`.",
+            "required": true,
+            "example": "3d6+2",
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d+)?d\\d+(\\s*[+-]\\s*\\d+)?$"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-die rolls, modifier, and total.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiceOutcome"
+                },
+                "example": {
+                  "outcome": {
+                    "notation": "3d6+2",
+                    "rolls": [
+                      4,
+                      6,
+                      3
+                    ],
+                    "modifier": 2,
+                    "total": 15
+                  },
+                  "clientSeed": "tabletop",
+                  "serverHash": "9f86d081884c7d65...",
+                  "nonce": 0,
+                  "cursor": 0,
+                  "count": 3,
+                  "sides": 6,
+                  "modifier": 2,
+                  "endpoint": "dice",
+                  "created": 1716566400000
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/floats": {
+      "get": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Generate random floats",
+        "description": "Generate cryptographically verifiable random floating-point numbers in the range [0, 1).",
+        "operationId": "getFloats",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "$ref": "#/components/parameters/Count"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A batch of random floats and the associated server hash.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloatOutcome"
+                },
+                "example": {
+                  "outcome": [
+                    0.4823,
+                    0.1175,
+                    0.9034,
+                    0.5567,
+                    0.2218
+                  ],
+                  "clientSeed": "my-app",
+                  "serverHash": "9f86d081884c7d65...",
+                  "nonce": 0,
+                  "cursor": 5,
+                  "count": 5,
+                  "endpoint": "floats",
+                  "created": 1716566400000,
+                  "shortId": "k7Qm2A9bXz",
+                  "permalink": "https://provable.io/o/k7Qm2A9bXz"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/gaussian": {
+      "get": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Sample a statistical distribution",
+        "description": "Draw samples from a `normal`, `exponential`, or `poisson` distribution with caller-supplied parameters.",
+        "operationId": "gaussian",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "$ref": "#/components/parameters/Count"
+          },
+          {
+            "name": "distribution",
+            "in": "query",
+            "description": "Which distribution to sample.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "normal",
+                "exponential",
+                "poisson"
+              ],
+              "default": "normal"
+            }
+          },
+          {
+            "name": "mean",
+            "in": "query",
+            "description": "Mean (μ) for `normal`. Defaults to 0.",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 0
+            }
+          },
+          {
+            "name": "stddev",
+            "in": "query",
+            "description": "Standard deviation (σ) for `normal`. Must be > 0. Defaults to 1.",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "lambda",
+            "in": "query",
+            "description": "Rate parameter (λ) for `exponential` (> 0) or `poisson` (> 0, ≤ 100). Defaults to 1.",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An array of samples from the requested distribution.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GaussianOutcome"
+                },
+                "example": {
+                  "outcome": [
+                    -0.42,
+                    1.05,
+                    0.18,
+                    -1.21,
+                    0.66
+                  ],
+                  "clientSeed": "stats",
+                  "serverHash": "9f86d081884c7d65...",
+                  "nonce": 0,
+                  "cursor": 0,
+                  "count": 5,
+                  "distribution": "normal",
+                  "mean": 0,
+                  "stddev": 1,
+                  "endpoint": "gaussian",
+                  "created": 1716566400000
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Service health",
+        "description": "Service health, version, and uptime. Returns 503 when the database is unreachable or the server is shutting down.",
+        "operationId": "getHealth",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is healthy.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "example": {
+                  "status": "ok",
+                  "db": "ok",
+                  "version": "1.0.0",
+                  "uptime": 12345,
+                  "timestamp": "2026-05-24T12:00:00.000Z"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "503": {
+            "description": "Service is degraded or shutting down.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public-metrics": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Public service metrics",
+        "description": "Privacy-safe aggregate adoption and operational metrics for the homepage. The account value is the current account total. The outcome value is a persisted lifetime total that includes anonymous traffic and excludes test mode. Counts contain no account or outcome details. Response time covers only successful, completed, non-test, non-stream requests to public product API endpoints in the recent in-memory window on the current server instance.",
+        "operationId": "getPublicMetrics",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Current metrics, with unavailable aggregate values represented as null when the database cannot be reached.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicMetrics"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/api/incrementCursor": {
+      "get": {
+        "tags": [
+          "Verification"
+        ],
+        "summary": "Advance the cursor for a client seed",
+        "description": "Bumps the cursor for the given `clientSeed`; `nonce` keeps counting up so no earlier draw is ever repeated. The next call to `/api/floats` or `/api/ints` for this seed will derive from a fresh row in the underlying HMAC stream. Use this to rotate to a new \"round\" of draws without changing the seed pair. Returns `400` if the client seed has no recorded state yet.",
+        "operationId": "incrementCursor",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The new cursor/nonce pair for this seed, with the current `serverHash` echoed back.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "clientSeed": {
+                      "type": "string"
+                    },
+                    "cursor": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "nonce": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "serverHash": {
+                      "type": "string"
+                    },
+                    "created": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Unix ms when the cursor was bumped."
+                    }
+                  },
+                  "required": [
+                    "clientSeed",
+                    "cursor",
+                    "nonce",
+                    "serverHash",
+                    "created"
+                  ]
+                },
+                "example": {
+                  "clientSeed": "my-app",
+                  "cursor": 6,
+                  "nonce": 0,
+                  "serverHash": "9f86d081884c7d65...",
+                  "created": 1716566400000
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/ints": {
+      "get": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Generate random integers",
+        "description": "Generate cryptographically verifiable random integers within a custom inclusive range.",
+        "operationId": "getInts",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "$ref": "#/components/parameters/Count"
+          },
+          {
+            "name": "min",
+            "in": "query",
+            "description": "Minimum value (inclusive).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "max",
+            "in": "query",
+            "description": "Maximum value (inclusive). The range max - min + 1 may be at most 2^32 (4294967296).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 100
+            }
+          },
+          {
+            "$ref": "#/components/parameters/ToolMeta"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A batch of random integers and the associated server hash.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntOutcome"
+                },
+                "example": {
+                  "outcome": [
+                    42,
+                    87,
+                    13,
+                    65,
+                    29
+                  ],
+                  "clientSeed": "my-app",
+                  "serverHash": "9f86d081884c7d65...",
+                  "nonce": 0,
+                  "cursor": 5,
+                  "count": 5,
+                  "min": 1,
+                  "max": 100,
+                  "endpoint": "ints",
+                  "created": 1716566400000,
+                  "shortId": "k7Qm2A9bXz",
+                  "permalink": "https://provable.io/o/k7Qm2A9bXz"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/listOutcomes": {
+      "get": {
+        "tags": [
+          "Verification"
+        ],
+        "summary": "List outcomes for a client seed",
+        "description": "List recorded outcomes for a given client seed, newest first, at most `limit` (default and max 1000) per call. To page, pass `before=<cursor>:<nonce>` from the last outcome of the previous page. Password-tool receipts retain verification metadata but never return the generated integers or derivation coordinates.",
+        "operationId": "listOutcomes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Max outcomes to return (1-1000, default 1000).",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 1000 }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Keyset cursor `cursor:nonce` from the last outcome of the previous page; returns strictly older outcomes.",
+            "schema": { "type": "string", "pattern": "^\\d+:\\d+$", "example": "0:120" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of outcomes for the given client seed.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PublicOutcome"
+                  }
+                },
+                "example": [
+                  {
+                    "outcome": [
+                      42,
+                      87,
+                      13,
+                      65,
+                      29
+                    ],
+                    "clientSeed": "my-app",
+                    "serverHash": "9f86d081884c7d65...",
+                    "nonce": 0,
+                    "cursor": 5,
+                    "endpoint": "ints",
+                    "created": 1716566400000,
+                    "shortId": "k7Qm2A9bXz",
+                    "permalink": "https://provable.io/o/k7Qm2A9bXz"
+                  }
+                ]
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/merkle": {
+      "get": {
+        "tags": [
+          "Transparency"
+        ],
+        "summary": "List recent daily Merkle roots",
+        "description": "Returns the most recent daily Merkle roots in reverse chronological order. Each root commits to every outcome generated during that UTC day.",
+        "operationId": "listMerkleRoots",
+        "security": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of roots to return (1-90).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 90,
+              "default": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recent daily roots.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roots": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MerkleRoot"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "roots": [
+                    {
+                      "date": "2026-05-28",
+                      "root": "a3f1c2d4e5...e7",
+                      "leafCount": 14238,
+                      "treeHeight": 14,
+                      "publishedAt": 1716681900000
+                    },
+                    {
+                      "date": "2026-05-27",
+                      "root": "b7e2f4a1c9...3d",
+                      "leafCount": 13104,
+                      "treeHeight": 14,
+                      "publishedAt": 1716595500000
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" }
+        }
+      }
+    },
+    "/api/merkle/{date}": {
+      "get": {
+        "tags": [
+          "Transparency"
+        ],
+        "summary": "Get a published daily Merkle root",
+        "description": "Returns the published Merkle root for the given UTC day, plus the leaf count, tree height, and publish timestamp.",
+        "operationId": "getMerkleRoot",
+        "security": [],
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "description": "UTC date in `YYYY-MM-DD` form.",
+            "example": "2026-05-23",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published root for that date.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerkleRoot"
+                },
+                "example": {
+                  "date": "2026-05-23",
+                  "root": "a3f1c2...e7",
+                  "leafCount": 14238,
+                  "treeHeight": 14,
+                  "publishedAt": 1716595500000
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "404": {
+            "description": "No root published for this date yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/merkle/{date}/proof/{outcomeId}": {
+      "get": {
+        "tags": [
+          "Transparency"
+        ],
+        "summary": "Get an inclusion proof for an outcome",
+        "description": "Returns the Merkle inclusion proof for `outcomeId` within the published tree for `date`. The proof contains the leaf, its index, the sibling hashes along the path to the root, and the published root itself. Anyone can verify the proof locally by recomputing the root from the leaf and siblings — see the leaf encoding documented at `/transparency` and `/api-docs#merkle`.",
+        "operationId": "getMerkleProof",
+        "security": [],
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "description": "UTC date in `YYYY-MM-DD` form.",
+            "example": "2026-05-23",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "outcomeId",
+            "in": "path",
+            "required": true,
+            "description": "The outcome's shortId (unique, preferred) or `clientSeed:cursor:nonce`. The triple can repeat across API-key chains; it then resolves to the first match.",
+            "example": "my-app:5:0",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Inclusion proof.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerkleProof"
+                },
+                "example": {
+                  "date": "2026-05-23",
+                  "outcomeId": "my-app:5:0",
+                  "leaf": {
+                    "outcomeId": "my-app:5:0",
+                    "serverHash": "9f86d081884c7d65...",
+                    "clientSeed": "my-app",
+                    "timestamp": 1716566400000,
+                    "canonical": "my-app:5:0|9f86d081884c7d65...|my-app|1716566400000",
+                    "hash": "4d7e1b2c8a...f3"
+                  },
+                  "index": 8123,
+                  "leafCount": 14238,
+                  "treeHeight": 14,
+                  "root": "a3f1c2d4e5...e7",
+                  "publishedAt": 1716595500000,
+                  "siblings": [
+                    {
+                      "position": "right",
+                      "hash": "1a2b3c4d5e...90"
+                    },
+                    {
+                      "position": "left",
+                      "hash": "6f7e8d9c0b...21"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "404": {
+            "description": "Root not published for that date, or outcome not in that day's tree.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/outcome": {
+      "get": {
+        "tags": [
+          "Verification"
+        ],
+        "summary": "Look up a single recorded outcome",
+        "description": "Fetches a single recorded outcome by its `(clientSeed, cursor, nonce)` triple. Useful for re-fetching a known outcome's full record (including `serverHash`, `endpoint`-specific fields, and `shortId`) without scanning the whole seed via `/api/listOutcomes`. Password-tool receipts never return the generated integers or derivation coordinates. Returns `400` when the outcome is not found.",
+        "operationId": "getOutcome",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor of the outcome to look up.",
+            "required": true,
+            "example": 5,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "nonce",
+            "in": "query",
+            "description": "Nonce of the outcome to look up.",
+            "required": true,
+            "example": 0,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The recorded outcome.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicOutcome"
+                },
+                "example": {
+                  "outcome": [
+                    42,
+                    7,
+                    88,
+                    13,
+                    61
+                  ],
+                  "clientSeed": "my-app",
+                  "serverHash": "9f86d081884c7d65...",
+                  "nonce": 0,
+                  "cursor": 5,
+                  "count": 5,
+                  "min": 1,
+                  "max": 100,
+                  "endpoint": "ints",
+                  "created": 1716566400000,
+                  "shortId": "k7Qm2A9bXz",
+                  "mode": "live",
+                  "permalink": "https://provable.io/o/k7Qm2A9bXz"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/pick": {
+      "get": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Weighted random pick",
+        "description": "Pick one item from a list, optionally with per-item weights. Returns the chosen item and its zero-based `index`.",
+        "operationId": "pickItem",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "name": "items",
+            "in": "query",
+            "description": "Items to choose from. Same encoding as `/api/shuffle`. 1-1000 entries.",
+            "required": true,
+            "example": "common,rare,legendary",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "weights",
+            "in": "query",
+            "description": "Optional non-negative weights, one per item. Defaults to uniform. Must sum to a positive number.",
+            "required": false,
+            "example": "70,25,5",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The picked item and its index.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PickOutcome"
+                },
+                "example": {
+                  "outcome": "legendary",
+                  "index": 2,
+                  "clientSeed": "loot-roll",
+                  "serverHash": "9f86d081884c7d65...",
+                  "nonce": 0,
+                  "cursor": 0,
+                  "count": 1,
+                  "weights": [
+                    70,
+                    25,
+                    5
+                  ],
+                  "endpoint": "pick",
+                  "created": 1716566400000
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/reveal": {
+      "post": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Reveal and use a committed server seed (commit-reveal step 2)",
+        "description": "Submit your `clientSeed` and the generation parameters against a previously committed `commitId`. The server marks the commit revealed (single-use), runs the requested generation against the committed `serverSeed`, persists the outcome, and returns the outcome plus the revealed `serverSeed` so you can independently re-derive the values. Returns `409 Conflict` if the commit has already been revealed, `410 Gone` if it expired, and `404` if it never existed.",
+        "operationId": "revealCommit",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevealRequest"
+              },
+              "example": {
+                "commitId": "8c3d7b9e-1f2a-4c5d-9e8f-7a6b5c4d3e2f",
+                "clientSeed": "my-app",
+                "endpoint": "ints",
+                "params": {
+                  "count": 5,
+                  "min": 1,
+                  "max": 100
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The outcome computed from the committed server seed and your client seed, plus the revealed server seed.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevealOutcome"
+                },
+                "example": {
+                  "outcome": [
+                    42,
+                    87,
+                    13,
+                    65,
+                    29
+                  ],
+                  "clientSeed": "my-app",
+                  "serverHash": "9f86d081884c7d65...",
+                  "serverSeed": "b1946ac92492d2347c6235b4d2611184...",
+                  "nonce": 0,
+                  "cursor": 0,
+                  "count": 5,
+                  "min": 1,
+                  "max": 100,
+                  "endpoint": "ints",
+                  "commitId": "8c3d7b9e-1f2a-4c5d-9e8f-7a6b5c4d3e2f",
+                  "created": 1716566400000
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "404": {
+            "description": "Commit not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "commit not found or expired"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The commit was created with a different API key (or anonymously). Reveal with the key that created it.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "example": { "error": "commit was created with a different API key" } } }
+          },
+          "409": {
+            "description": "Commit has already been revealed (single-use).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "commit already revealed"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Commit expired before being revealed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "commit expired"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/rotate": {
+      "post": {
+        "tags": [
+          "Verification"
+        ],
+        "summary": "Rotate the server seed for a client seed",
+        "description": "Reveals the *previous* `serverSeed` for the given `clientSeed`, then generates a fresh `serverSeed`. `cursor` and `nonce` carry over unchanged, so recorded outcomes keep unique coordinates. This is the **only** endpoint that exposes the one-shot `serverSeed` — `/api/floats`, `/api/ints`, the RNG primitives, and `/api/listOutcomes` only ever surface `serverHash`.\n\n**Per-key hash chains.** Each api key has its own independent hash chain per `clientSeed`. Rotating an authenticated call rotates *only* that key's chain — it does not touch any other key's chain or the anonymous chain.\n\n**Anonymous callers** rotate the shared anonymous chain for the given `clientSeed`. There is no ownership on that chain — any caller (authenticated or not) can rotate it.\n\n**Test keys.** `pk_test_*` keys are rejected with `403` (`code: \"test_mode_forbidden\"`): test mode has no live chain of its own, so rotation is undefined for it.\n\nThe addressed chain must already have at least one recorded outcome (i.e. that key — or an anonymous caller, for the anon chain — has called `/api/floats` or `/api/ints` with this `clientSeed`), otherwise the response is `404`.",
+        "operationId": "rotateServerSeed",
+        "security": [
+          {},
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "clientSeed": {
+                    "type": "string",
+                    "description": "The client seed whose serverSeed should be revealed and rotated."
+                  }
+                },
+                "required": [
+                  "clientSeed"
+                ]
+              },
+              "example": {
+                "clientSeed": "my-app"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Previous `serverSeed` revealed (verify by checking `sha256(revealed.serverSeed) === revealed.serverHash`) plus the new state. Future calls to `/api/floats`/`/api/ints` for this `clientSeed` will derive from `next.serverHash` at the `next.cursor` / `next.nonce` returned here.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "clientSeed": {
+                      "type": "string"
+                    },
+                    "revealed": {
+                      "type": "object",
+                      "properties": {
+                        "serverSeed": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "The previous server seed, now revealed. `null` only on a freshly-created row that never carried one."
+                        },
+                        "serverHash": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "cursor": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "nonce": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "serverSeed",
+                        "serverHash",
+                        "cursor",
+                        "nonce"
+                      ]
+                    },
+                    "next": {
+                      "type": "object",
+                      "properties": {
+                        "serverHash": {
+                          "type": "string",
+                          "description": "Hash of the freshly generated server seed. The new seed itself stays secret until the next rotate."
+                        },
+                        "cursor": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "nonce": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "rotatedAt": {
+                          "type": "integer",
+                          "format": "int64",
+                          "description": "Unix ms at which the rotation was committed."
+                        }
+                      },
+                      "required": [
+                        "serverHash",
+                        "cursor",
+                        "nonce",
+                        "rotatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "clientSeed",
+                    "revealed",
+                    "next"
+                  ]
+                },
+                "example": {
+                  "clientSeed": "my-app",
+                  "revealed": {
+                    "serverSeed": "b1946ac92492d2347c6235b4d2611184a3a6f3c1e5c1c4d8e6b7f1a2c3d4e5f6",
+                    "serverHash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+                    "cursor": 7,
+                    "nonce": 3
+                  },
+                  "next": {
+                    "serverHash": "a3b1c5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3",
+                    "cursor": 0,
+                    "nonce": 0,
+                    "rotatedAt": 1716566400000
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "403": {
+            "description": "The calling key is a `pk_test_*` test key. Test mode has no live chain to rotate.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "rotate requires a live (pk_live_*) api key or anonymous call; test keys have no live chain",
+                  "code": "test_mode_forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No `seed_state` exists for the addressed chain yet (for authed calls: this api key's chain for this `clientSeed`; for anonymous calls: the anon chain for this `clientSeed`). Call `/api/floats` or `/api/ints` first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "no seed_state for this (api key, clientSeed) chain — generate an outcome first"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/shuffle": {
+      "get": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Shuffle an array",
+        "description": "Return a uniformly fair shuffle of a caller-supplied array. The same `clientSeed`/`cursor`/`nonce` triple always yields the same permutation, so the result is fully verifiable.",
+        "operationId": "shuffleItems",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "name": "items",
+            "in": "query",
+            "description": "Items to shuffle. Pass a JSON array (`items=[\"a\",\"b\",\"c\"]`), a comma-separated list (`items=a,b,c`), or repeat the parameter (`items=a&items=b&items=c`). 1-1000 entries.",
+            "required": true,
+            "example": "a,b,c,d",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "$ref": "#/components/parameters/ToolMeta"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The shuffled array and the associated server hash.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShuffleOutcome"
+                },
+                "example": {
+                  "outcome": [
+                    "c",
+                    "a",
+                    "d",
+                    "b"
+                  ],
+                  "clientSeed": "my-app",
+                  "serverHash": "9f86d081884c7d65...",
+                  "nonce": 0,
+                  "cursor": 0,
+                  "count": 4,
+                  "endpoint": "shuffle",
+                  "created": 1716566400000
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/stream": {
+      "get": {
+        "tags": [
+          "Random"
+        ],
+        "summary": "Stream outcomes as Server-Sent Events",
+        "description": "Open a long-lived Server-Sent Events (SSE) connection that emits one verifiable outcome per `intervalMs`, up to a server-enforced 10-minute cap.\n\n**The response shape differs from every other endpoint here.** Instead of returning a single JSON body, the server holds the connection open and writes a stream of `text/event-stream` frames. Each frame is a self-contained `event: outcome` message whose `data:` field is a full JSON outcome (identical shape to the matching non-streaming endpoint, plus an `outcomeId` of `clientSeed:cursor:nonce`). Every emitted outcome verifies independently via `/api/verifyServerHash`.\n\nHeartbeat comments (`: heartbeat …`) are sent every ~15 seconds. When the duration cap or quota is reached the server emits a terminal `event: done` frame and closes — reconnect to keep streaming. Closing the client (e.g. `EventSource.close()`) cleanly stops billing. Each emitted outcome counts as one billed call for live-key streams.\n\n**Resuming after a disconnect.** Every `event: outcome` frame includes an `id:` line of `clientSeed:cursor:nonce`. On a transient drop, browsers' built-in `EventSource` auto-reconnects and replays it as a `Last-Event-ID` request header; raw `fetch` clients can pass the same value as a `?lastEventId=` query parameter. Either way the server only emits outcomes strictly after that point on the same `clientSeed`, so reconnects don't double-count or skip — and skipped duplicates aren't billed.",
+        "operationId": "streamOutcomes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "name": "endpoint",
+            "in": "query",
+            "description": "Which generator to stream.",
+            "required": true,
+            "example": "floats",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "floats",
+                "ints",
+                "shuffle",
+                "pick",
+                "bytes",
+                "dice",
+                "gaussian"
+              ]
+            }
+          },
+          {
+            "name": "intervalMs",
+            "in": "query",
+            "description": "Milliseconds between outcomes.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 60000,
+              "default": 1000
+            }
+          },
+          {
+            "name": "lastEventId",
+            "in": "query",
+            "description": "Resume after a disconnect. Pass the most recent `outcomeId` you received (`clientSeed:cursor:nonce`); the server will only emit outcomes strictly after that point on the same `clientSeed`. Equivalent to the `Last-Event-ID` request header that `EventSource` sends automatically on auto-reconnect.",
+            "required": false,
+            "example": "my-app:42:0",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "description": "Standard SSE resume header. Same semantics as the `lastEventId` query parameter — emit only outcomes strictly after this `clientSeed:cursor:nonce`. Sent automatically by `EventSource` on auto-reconnect.",
+            "required": false,
+            "example": "my-app:42:0",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An event stream. The body is `text/event-stream`, not JSON. Two event types are emitted: `outcome` (one per interval, `data:` is a JSON outcome with an extra `outcomeId` field) and `done` (terminal, `data:` describes the close `reason` — `max_duration` or `quota_exceeded`).",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "id: my-app:0:0\nevent: outcome\ndata: {\"outcome\":[0.4823],\"clientSeed\":\"my-app\",\"serverHash\":\"9f86d0...\",\"nonce\":0,\"cursor\":0,\"count\":1,\"endpoint\":\"floats\",\"created\":1716566400000,\"outcomeId\":\"my-app:0:0\"}\n\n: heartbeat 1716566415000\n\nevent: done\ndata: {\"reason\":\"max_duration\",\"count\":600,\"durationMs\":600000}\n\n"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/verifyServerHash": {
+      "get": {
+        "tags": [
+          "Verification"
+        ],
+        "summary": "Verify a server hash",
+        "description": "Verify that a server hash matches our records for a given client seed. Returns `true` if the hash is authentic.",
+        "operationId": "verifyServerHash",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientSeed"
+          },
+          {
+            "name": "serverHash",
+            "in": "query",
+            "description": "The server hash returned with the original outcome.",
+            "required": true,
+            "example": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification result. Returns the literal `true` when either the current `seed_state` for this client seed still carries the supplied `serverHash` (a one-line fast path) **or** any recorded outcome under this client seed (e.g. a revealed commit-reveal outcome) was generated against that `serverHash`. Otherwise returns a `VerifyResult` object whose `verified` flag and `outcomes` array describe whether — and where — the (clientSeed, serverHash) pair appears in recorded history.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ],
+                      "description": "Fast-path match against live seed_state."
+                    },
+                    {
+                      "$ref": "#/components/schemas/VerifyResult"
+                    }
+                  ]
+                },
+                "example": {
+                  "verified": true,
+                  "clientSeed": "my-app",
+                  "serverHash": "9f86d081884c7d65...",
+                  "outcomes": [
+                    {
+                      "shortId": "k7Qm2A9bXz",
+                      "permalink": "https://provable.io/o/k7Qm2A9bXz",
+                      "endpoint": "ints",
+                      "cursor": 5,
+                      "nonce": 0,
+                      "created": 1716566400000
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api/verifyShortId": {
+      "get": {
+        "tags": [
+          "Verification"
+        ],
+        "summary": "Verify an outcome by shortId",
+        "description": "Public, no-auth verifier used by the `/verify` landing page. Given a `shortId` returned by any random-generating endpoint (or visible in an `/o/:id` permalink), returns recorded metadata and a server-computed verification verdict. Password-tool receipts never return the generated integers or derivation coordinates. A response is `verified: true` when either (a) the live seed state still carries the same `serverHash` or (b) the `serverSeed` has been revealed and `sha256(serverSeed)` reproduces the recorded `serverHash`.",
+        "operationId": "verifyShortId",
+        "parameters": [
+          {
+            "name": "shortId",
+            "in": "query",
+            "description": "The 4-32 character alphanumeric `shortId` for the outcome.",
+            "required": true,
+            "example": "k7Qm2A9bXz",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9]{4,32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification result for the outcome.",
+            "headers": {
+              "Server-Timing": {
+                "$ref": "#/components/headers/ServerTiming"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "verified",
+                    "reason",
+                    "shortId"
+                  ],
+                  "properties": {
+                    "verified": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "shortId": {
+                      "type": "string"
+                    },
+                    "clientSeed": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "serverHash": {
+                      "type": "string"
+                    },
+                    "cursor": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "nullable": true
+                    },
+                    "nonce": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "nullable": true
+                    },
+                    "endpoint": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "outcome": {
+                      "description": "The original generated result. Its shape depends on endpoint. Null for password-tool records so the password cannot be reconstructed through this public lookup.",
+                      "nullable": true,
+                      "oneOf": [
+                        { "type": "array", "items": {} },
+                        { "type": "object" }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "nullable": true
+                    },
+                    "min": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "max": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "notation": {
+                      "type": "string"
+                    },
+                    "toolMeta": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "created": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "redacted": {
+                      "type": "boolean",
+                      "description": "True when password result material was removed from the public response."
+                    },
+                    "permalink": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  }
+                },
+                "example": {
+                  "verified": true,
+                  "reason": "Server seed hash on file matches the current state for this client seed.",
+                  "shortId": "k7Qm2A9bXz",
+                  "clientSeed": "my-app",
+                  "serverHash": "9f86d081884c7d65...",
+                  "cursor": 5,
+                  "nonce": 0,
+                  "endpoint": "ints",
+                  "created": 1716566400000,
+                  "permalink": "https://provable.io/o/k7Qm2A9bXz"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": { "$ref": "#/components/responses/InvalidApiKey" },
+          "404": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/o/{id}": {
+      "get": {
+        "tags": [
+          "Verification"
+        ],
+        "summary": "Public outcome permalink page",
+        "description": "Public, no-auth HTML page for a recorded outcome. Anyone with the `shortId` can open it to see the endpoint, parameters, client seed, server hash, the generated values, and a server-side **Verified ✓** / **Mismatch ✗** badge. Includes `og:image` / `og:title` meta tags so links unfurl in Slack, Discord, and X. The `shortId` is returned by `/api/floats`, `/api/ints`, `/api/listOutcomes`, and `/api/verifyServerHash`.",
+        "operationId": "getOutcomePermalink",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The `shortId` returned with the outcome (~10 alphanumeric characters).",
+            "example": "k7Qm2A9bXz",
+            "schema": {
+              "type": "string",
+              "minLength": 4,
+              "maxLength": 32,
+              "pattern": "^[A-Za-z0-9]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTML permalink page rendering the outcome.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No outcome exists with that short ID.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/o/{id}/og.png": {
+      "get": {
+        "tags": [
+          "Verification"
+        ],
+        "summary": "Dynamic social-preview image for an outcome permalink",
+        "description": "Returns a 1200×630 PNG rendered from the outcome (shortId, endpoint, **Verified ✓** / **Unverified** badge, count, and a sample of the generated values). Used as the `og:image` / `twitter:image` for `/o/{id}` so links unfurl with a per-outcome card in Slack, Discord, and X. Responses are cached (5 minutes). If the outcome doesn't exist or rendering fails, the generic site `og-image.jpg` is returned with a short cache so unfurls never break.",
+        "operationId": "getOutcomeOgImage",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The `shortId` returned with the outcome (~10 alphanumeric characters).",
+            "example": "k7Qm2A9bXz",
+            "schema": {
+              "type": "string",
+              "minLength": 4,
+              "maxLength": 32,
+              "pattern": "^[A-Za-z0-9]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "1200×630 PNG preview card (or the fallback `og-image.jpg` if the shortId is unknown or rendering fails).",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Send your API key in the `x-api-key` header. Two key kinds are supported:\n\n- `pk_live_…` — live key, real cryptographic randomness, counts toward your daily quota, fires webhooks.\n- `pk_test_…` — test key, deterministic per (account, clientSeed) so the same parameters always return the same outcome (any test key on your account with the same `clientSeed` yields identical results). Test calls are flagged `mode: \"test\"`, don't appear in usage stats, and don't fire webhooks. They're still subject to the anonymous per-minute rate limit.\n\nCreate or rotate keys on the dashboard at https://provable.io/dashboard.\n\n**Per-key restrictions.** Each key may carry an allowed-IP list (CIDR ranges) and/or an allowed-Referer-origin list. Empty lists mean no restriction. Requests that fail an active restriction are rejected with `403` and a JSON body of `{ \"error\": \"…\", \"code\": \"ip_not_allowed\" | \"referer_not_allowed\" }`, and the denial is logged to the key's activity in the dashboard."
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Send your API key as a bearer token in the `Authorization` header. Accepts either `pk_live_…` or `pk_test_…` keys; see the `ApiKeyAuth` description for behavior differences.\n\nSame per-key IP / Referer-origin restrictions apply as with `ApiKeyAuth`: a request that doesn't match an active allowlist is rejected with `403` and code `ip_not_allowed` or `referer_not_allowed`."
+      }
+    },
+    "headers": {
+      "ServerTiming": {
+        "description": "Server processing duration for this finite successful live response, formatted as `total;dur=<milliseconds>`. The duration is measured by the server and does not include network transfer, client work, or the browser's full round-trip time. The header is omitted for test-key responses, when a reliable measurement is unavailable, and is not guaranteed on error responses. It is intentionally not reported for SSE responses because an initial-response setup measurement would not represent the lifetime of the stream.",
+        "schema": {
+          "type": "string",
+          "pattern": "^total;dur=[0-9]+(?:\\.[0-9]+)?$"
+        },
+        "example": "total;dur=12.4"
+      }
+    },
+    "parameters": {
+      "ClientSeed": {
+        "name": "clientSeed",
+        "in": "query",
+        "description": "Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `\"test\"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history.",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "default": "test"
+        }
+      },
+      "Count": {
+        "name": "count",
+        "in": "query",
+        "description": "Number of values to generate (1-100).",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 1
+        }
+      },
+      "ToolMeta": {
+        "name": "toolMeta",
+        "in": "query",
+        "description": "Reserved JSON object (up to 512 characters) used by supported Provable.io browser tools. API clients normally omit this.",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 512
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Optional opaque string (≤255 chars). When supplied on any random-generating endpoint (`/api/floats`, `/api/ints`, `/api/shuffle`, `/api/pick`, `/api/bytes`, `/api/dice`, `/api/gaussian`, `/api/batch`), the server stores the response for 24 hours and returns the **same** status, body, and `Content-Type` for any retry that uses the same key — replays are flagged with the `Idempotent-Replayed: true` response header and do **not** consume quota. Reusing the key with a different request body or query parameters returns `409 Conflict` with code `idempotency_key_conflict`. Keys are scoped per API key (or per IP for anonymous calls), so two callers can use the same opaque value without collision.",
+        "example": "8c3d7b9e-1f2a-4c5d-9e8f-7a6b5c4d3e2f",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      }
+    },
+    "schemas": {
+      "BaseOutcome": {
+        "type": "object",
+        "description": "Fields shared by every recorded outcome. Each concrete `*Outcome` schema extends this with its own `endpoint` discriminator value, `outcome` shape, and any endpoint-specific parameters.",
+        "properties": {
+          "clientSeed": {
+            "type": "string"
+          },
+          "serverHash": {
+            "type": "string",
+            "description": "SHA-256 hash of the server seed used for this generation."
+          },
+          "nonce": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Number of underlying draws this outcome represents (e.g. requested float count, number of dice rolled, items shuffled)."
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix timestamp in milliseconds."
+          },
+          "shortId": {
+            "type": "string",
+            "description": "Stable ~10-character public ID for this outcome. Used to build a shareable permalink at /o/{shortId}."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "test"
+            ],
+            "description": "`live` for real cryptographic randomness drawn from the (api key, clientSeed) hash chain. `test` is returned when the call was authenticated with a `pk_test_…` key; the outcome is deterministic per (account, clientSeed), bypasses the live chain entirely, is excluded from live usage stats, and does not trigger webhooks."
+          },
+          "toolMeta": {
+            "type": "object",
+            "description": "Optional display settings saved by Provable.io's browser tools so a shared result can be reconstructed.",
+            "additionalProperties": true
+          },
+          "redacted": {
+            "type": "boolean",
+            "description": "Present on public lookup responses. True when sensitive password result material was removed."
+          }
+        },
+        "required": [
+          "clientSeed",
+          "serverHash",
+          "nonce",
+          "cursor",
+          "count",
+          "created",
+          "shortId",
+          "mode"
+        ]
+      },
+      "PasswordReceipt": {
+        "type": "object",
+        "description": "Public verification receipt for a password-tool call. The generated integer stream and its derivation coordinates are deliberately null.",
+        "required": [
+          "serverHash",
+          "endpoint",
+          "outcome",
+          "shortId",
+          "toolMeta",
+          "redacted"
+        ],
+        "properties": {
+          "serverHash": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string",
+            "enum": [
+              "ints"
+            ]
+          },
+          "outcome": {
+            "nullable": true
+          },
+          "clientSeed": {
+            "type": "string",
+            "nullable": true
+          },
+          "cursor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "nonce": {
+            "type": "integer",
+            "nullable": true
+          },
+          "count": {
+            "type": "integer",
+            "nullable": true
+          },
+          "min": {
+            "type": "integer",
+            "nullable": true
+          },
+          "max": {
+            "type": "integer",
+            "nullable": true
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "shortId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "toolMeta": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "redacted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "permalink": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          }
+        }
+      },
+      "PublicOutcome": {
+        "description": "A normal outcome or a redacted password verification receipt returned by public lookup endpoints.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Outcome"
+          },
+          {
+            "$ref": "#/components/schemas/PasswordReceipt"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "redacted",
+          "mapping": {
+            "false": "#/components/schemas/Outcome",
+            "true": "#/components/schemas/PasswordReceipt"
+          }
+        }
+      },
+      "Outcome": {
+        "description": "Discriminated union of every concrete outcome shape returned by the random-generating endpoints. Use the `endpoint` field to pick the matching schema.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/FloatOutcome"
+          },
+          {
+            "$ref": "#/components/schemas/IntOutcome"
+          },
+          {
+            "$ref": "#/components/schemas/ShuffleOutcome"
+          },
+          {
+            "$ref": "#/components/schemas/PickOutcome"
+          },
+          {
+            "$ref": "#/components/schemas/BytesOutcome"
+          },
+          {
+            "$ref": "#/components/schemas/DiceOutcome"
+          },
+          {
+            "$ref": "#/components/schemas/GaussianOutcome"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "endpoint",
+          "mapping": {
+            "floats": "#/components/schemas/FloatOutcome",
+            "ints": "#/components/schemas/IntOutcome",
+            "shuffle": "#/components/schemas/ShuffleOutcome",
+            "pick": "#/components/schemas/PickOutcome",
+            "bytes": "#/components/schemas/BytesOutcome",
+            "dice": "#/components/schemas/DiceOutcome",
+            "gaussian": "#/components/schemas/GaussianOutcome"
+          }
+        }
+      },
+      "VerifyResult": {
+        "type": "object",
+        "description": "Result of /api/verifyServerHash, including any recorded outcomes matching the (clientSeed, serverHash) pair.",
+        "properties": {
+          "verified": {
+            "type": "boolean",
+            "description": "True when the server hash matches what we have on file for this client seed."
+          },
+          "clientSeed": {
+            "type": "string"
+          },
+          "serverHash": {
+            "type": "string"
+          },
+          "outcomes": {
+            "type": "array",
+            "description": "Permalinks for every recorded outcome under this (clientSeed, serverHash). May be empty if none were recorded.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "shortId": {
+                  "type": "string"
+                },
+                "permalink": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "endpoint": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "cursor": {
+                  "type": "integer"
+                },
+                "nonce": {
+                  "type": "integer"
+                },
+                "created": {
+                  "type": "integer",
+                  "format": "int64",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "shortId",
+                "permalink"
+              ]
+            }
+          }
+        },
+        "required": [
+          "verified",
+          "clientSeed",
+          "serverHash",
+          "outcomes"
+        ]
+      },
+      "FloatOutcome": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseOutcome"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "format": "double",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "endpoint": {
+                "type": "string",
+                "enum": [
+                  "floats"
+                ]
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "live",
+                  "test"
+                ],
+                "description": "`live` for real cryptographic randomness. `test` is returned when the call was authenticated with a `pk_test_…` key; the outcome is deterministic per (account, clientSeed), is excluded from live usage stats, and does not trigger webhooks."
+              },
+              "permalink": {
+                "type": "string",
+                "format": "uri",
+                "description": "Absolute public URL anyone can open to view and re-verify this outcome."
+              }
+            },
+            "required": [
+              "outcome",
+              "endpoint",
+              "mode",
+              "permalink"
+            ]
+          }
+        ]
+      },
+      "IntOutcome": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseOutcome"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "endpoint": {
+                "type": "string",
+                "enum": [
+                  "ints"
+                ]
+              },
+              "min": {
+                "type": "integer",
+                "description": "Inclusive lower bound used for this draw."
+              },
+              "max": {
+                "type": "integer",
+                "description": "Inclusive upper bound used for this draw."
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "live",
+                  "test"
+                ],
+                "description": "`live` for real cryptographic randomness. `test` is returned when the call was authenticated with a `pk_test_…` key; the outcome is deterministic per (account, clientSeed), is excluded from live usage stats, and does not trigger webhooks."
+              },
+              "permalink": {
+                "type": "string",
+                "format": "uri",
+                "description": "Absolute public URL anyone can open to view and re-verify this outcome."
+              }
+            },
+            "required": [
+              "outcome",
+              "endpoint",
+              "min",
+              "max",
+              "mode",
+              "permalink"
+            ]
+          }
+        ]
+      },
+      "MerkleRoot": {
+        "type": "object",
+        "description": "A published daily Merkle root over every outcome produced in a single UTC day.",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "UTC date in YYYY-MM-DD form.",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "root": {
+            "type": "string",
+            "description": "Hex-encoded SHA-256 root. Empty string when the day had zero outcomes."
+          },
+          "leafCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "treeHeight": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "publishedAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix timestamp in milliseconds when the root was published."
+          }
+        },
+        "required": [
+          "date",
+          "root",
+          "leafCount",
+          "treeHeight",
+          "publishedAt"
+        ]
+      },
+      "MerkleProof": {
+        "type": "object",
+        "description": "Inclusion proof for a single outcome within a published daily Merkle tree.",
+        "properties": {
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "outcomeId": {
+            "type": "string",
+            "description": "`clientSeed:cursor:nonce`."
+          },
+          "leaf": {
+            "type": "object",
+            "properties": {
+              "outcomeId": {
+                "type": "string"
+              },
+              "serverHash": {
+                "type": "string"
+              },
+              "clientSeed": {
+                "type": "string"
+              },
+              "timestamp": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "canonical": {
+                "type": "string",
+                "description": "`outcomeId|serverHash|clientSeed|timestamp` — the exact bytes that get hashed into the leaf."
+              },
+              "hash": {
+                "type": "string",
+                "description": "Hex of `SHA256(0x00 || utf8(canonical))`."
+              }
+            },
+            "required": [
+              "canonical",
+              "hash"
+            ]
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Zero-based position of the leaf in the sorted day."
+          },
+          "leafCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "treeHeight": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "root": {
+            "type": "string",
+            "description": "Published root the proof terminates at."
+          },
+          "publishedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "siblings": {
+            "type": "array",
+            "description": "Sibling hashes from leaf level up to the root.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "position": {
+                  "type": "string",
+                  "enum": [
+                    "left",
+                    "right"
+                  ],
+                  "description": "Side of the sibling relative to the accumulator: 'left' means `SHA256(0x01 || sibling || acc)`, 'right' means `SHA256(0x01 || acc || sibling)`."
+                },
+                "hash": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "position",
+                "hash"
+              ]
+            }
+          }
+        },
+        "required": [
+          "date",
+          "outcomeId",
+          "leaf",
+          "index",
+          "leafCount",
+          "root",
+          "siblings"
+        ]
+      },
+      "ShuffleOutcome": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseOutcome"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "array",
+                "description": "The input array shuffled into its verifiable permutation. Same length and contents as the request.",
+                "items": {}
+              },
+              "endpoint": {
+                "type": "string",
+                "enum": [
+                  "shuffle"
+                ]
+              },
+              "permalink": {
+                "type": "string",
+                "format": "uri",
+                "description": "Absolute public URL anyone can open to view and re-verify this outcome."
+              }
+            },
+            "required": [
+              "outcome",
+              "endpoint",
+              "permalink"
+            ]
+          }
+        ]
+      },
+      "Commit": {
+        "type": "object",
+        "description": "A pre-committed server seed published by the server. Hold onto `commitId` and `serverHash`; reveal before `expiresAt` (Unix ms) by calling `/api/reveal`.",
+        "properties": {
+          "commitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serverHash": {
+            "type": "string",
+            "description": "SHA-256 hash of the secret server seed."
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix timestamp in ms after which the commit is no longer revealable."
+          }
+        },
+        "required": [
+          "commitId",
+          "serverHash",
+          "expiresAt"
+        ]
+      },
+      "RevealRequest": {
+        "type": "object",
+        "properties": {
+          "commitId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The `commitId` returned by `/api/commit`."
+          },
+          "clientSeed": {
+            "type": "string",
+            "minLength": 1
+          },
+          "endpoint": {
+            "type": "string",
+            "enum": [
+              "floats",
+              "ints"
+            ],
+            "description": "Which generator to run against the committed server seed."
+          },
+          "params": {
+            "type": "object",
+            "description": "Generator parameters. For `floats`: `{ count }`. For `ints`: `{ count, min, max }`.",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 1
+              },
+              "min": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 1
+              },
+              "max": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 100
+              }
+            }
+          }
+        },
+        "required": [
+          "commitId",
+          "clientSeed",
+          "endpoint"
+        ]
+      },
+      "RevealOutcome": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseOutcome"
+          },
+          {
+            "type": "object",
+            "description": "Outcome returned from `/api/reveal`. Always uses the committed server seed; `endpoint` is restricted to the two generators the commit-reveal flow supports.",
+            "properties": {
+              "outcome": {
+                "type": "array",
+                "description": "Generated values. `number` items for `endpoint: \"floats\"` (each in [0, 1)); `integer` items for `endpoint: \"ints\"`.",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "endpoint": {
+                "type": "string",
+                "enum": [
+                  "floats",
+                  "ints"
+                ]
+              },
+              "min": {
+                "type": "integer",
+                "description": "Inclusive lower bound (only present when `endpoint: \"ints\"`)."
+              },
+              "max": {
+                "type": "integer",
+                "description": "Inclusive upper bound (only present when `endpoint: \"ints\"`)."
+              },
+              "serverSeed": {
+                "type": "string",
+                "description": "The now-revealed server seed. Verify by checking SHA-256(serverSeed) === serverHash."
+              },
+              "commitId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "outcome",
+              "endpoint",
+              "serverSeed",
+              "commitId"
+            ]
+          }
+        ]
+      },
+      "PickOutcome": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseOutcome"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "description": "The picked item (any JSON value drawn from the input `items` array)."
+              },
+              "index": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Zero-based index of the picked item."
+              },
+              "weights": {
+                "type": "array",
+                "nullable": true,
+                "description": "The per-item weights supplied with the request, or `null` when the caller used the default uniform distribution.",
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "endpoint": {
+                "type": "string",
+                "enum": [
+                  "pick"
+                ]
+              },
+              "permalink": {
+                "type": "string",
+                "format": "uri",
+                "description": "Absolute public URL anyone can open to view and re-verify this outcome."
+              }
+            },
+            "required": [
+              "outcome",
+              "endpoint",
+              "index",
+              "weights",
+              "permalink"
+            ]
+          }
+        ]
+      },
+      "BytesOutcome": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseOutcome"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "description": "Random bytes encoded as `hex` or `base64`, matching the `encoding` field."
+              },
+              "encoding": {
+                "type": "string",
+                "enum": [
+                  "hex",
+                  "base64"
+                ]
+              },
+              "endpoint": {
+                "type": "string",
+                "enum": [
+                  "bytes"
+                ]
+              },
+              "permalink": {
+                "type": "string",
+                "format": "uri",
+                "description": "Absolute public URL anyone can open to view and re-verify this outcome."
+              }
+            },
+            "required": [
+              "outcome",
+              "endpoint",
+              "encoding",
+              "permalink"
+            ]
+          }
+        ]
+      },
+      "DiceOutcome": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseOutcome"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "object",
+                "properties": {
+                  "notation": {
+                    "type": "string",
+                    "description": "Canonical `NdM`, `NdM+K`, or `NdM-K` form of the roll."
+                  },
+                  "rolls": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "modifier": {
+                    "type": "integer"
+                  },
+                  "total": {
+                    "type": "integer",
+                    "description": "Sum of `rolls` plus `modifier`."
+                  }
+                },
+                "required": [
+                  "notation",
+                  "rolls",
+                  "modifier",
+                  "total"
+                ]
+              },
+              "sides": {
+                "type": "integer",
+                "minimum": 2,
+                "description": "Number of sides on each die (parsed from the request notation)."
+              },
+              "modifier": {
+                "type": "integer",
+                "description": "Flat modifier (parsed from the request notation)."
+              },
+              "endpoint": {
+                "type": "string",
+                "enum": [
+                  "dice"
+                ]
+              },
+              "permalink": {
+                "type": "string",
+                "format": "uri",
+                "description": "Absolute public URL anyone can open to view and re-verify this outcome."
+              }
+            },
+            "required": [
+              "outcome",
+              "endpoint",
+              "sides",
+              "modifier",
+              "permalink"
+            ]
+          }
+        ]
+      },
+      "GaussianOutcome": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseOutcome"
+          },
+          {
+            "type": "object",
+            "description": "Samples from a `normal`, `exponential`, or `poisson` distribution. Only the parameters relevant to the chosen `distribution` are present (`mean`/`stddev` for `normal`, `lambda` for `exponential` and `poisson`).",
+            "properties": {
+              "outcome": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "distribution": {
+                "type": "string",
+                "enum": [
+                  "normal",
+                  "exponential",
+                  "poisson"
+                ]
+              },
+              "mean": {
+                "type": "number",
+                "description": "Mean (μ). Present only when `distribution: \"normal\"`."
+              },
+              "stddev": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Standard deviation (σ). Present only when `distribution: \"normal\"`."
+              },
+              "lambda": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Rate parameter (λ). Present only when `distribution: \"exponential\"` or `\"poisson\"`."
+              },
+              "endpoint": {
+                "type": "string",
+                "enum": [
+                  "gaussian"
+                ]
+              },
+              "permalink": {
+                "type": "string",
+                "format": "uri",
+                "description": "Absolute public URL anyone can open to view and re-verify this outcome."
+              }
+            },
+            "required": [
+              "outcome",
+              "endpoint",
+              "distribution",
+              "permalink"
+            ]
+          }
+        ]
+      },
+      "BatchRequest": {
+        "type": "object",
+        "required": [
+          "draws"
+        ],
+        "properties": {
+          "draws": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "required": [
+                "endpoint"
+              ],
+              "properties": {
+                "endpoint": {
+                  "type": "string",
+                  "enum": [
+                    "floats",
+                    "ints",
+                    "shuffle",
+                    "pick",
+                    "bytes",
+                    "dice",
+                    "gaussian"
+                  ],
+                  "description": "Which random-generating endpoint to invoke for this draw."
+                },
+                "params": {
+                  "type": "object",
+                  "description": "The same parameters you would pass as query string to the single-draw endpoint. Each draw must supply its own `clientSeed`.",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "BatchResponse": {
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "description": "One result per requested draw, in the same order as `draws`.",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "outcome"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "outcome": {
+                      "$ref": "#/components/schemas/Outcome"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Machine-readable failure code, e.g. `quota_exceeded`."
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "PublicMetrics": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "registeredUsers",
+          "callsServed",
+          "responseTime",
+          "apiStatus"
+        ],
+        "properties": {
+          "registeredUsers": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value",
+              "scope"
+            ],
+            "properties": {
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "nullable": true
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "current"
+                ]
+              }
+            }
+          },
+          "callsServed": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value",
+              "scope"
+            ],
+            "properties": {
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "nullable": true
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "lifetime_live_non_test"
+                ]
+              }
+            }
+          },
+          "responseTime": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "avgMs",
+              "sampleSize",
+              "scope"
+            ],
+            "properties": {
+              "avgMs": {
+                "type": "number",
+                "minimum": 0,
+                "nullable": true
+              },
+              "sampleSize": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "recent_instance_window"
+                ]
+              }
+            }
+          },
+          "apiStatus": {
+            "type": "string",
+            "enum": [
+              "operational",
+              "degraded"
+            ]
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded",
+              "shutting_down"
+            ]
+          },
+          "db": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "down"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "uptime": {
+            "type": "integer",
+            "description": "Seconds since process start."
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "responseTimes": {
+            "type": "object",
+            "description": "Rolling in-memory response-time aggregate for /api/* traffic on this server instance. Resets on restart.",
+            "properties": {
+              "windowSize": {
+                "type": "integer",
+                "description": "Number of samples retained per endpoint bucket."
+              },
+              "overall": {
+                "$ref": "#/components/schemas/ResponseTimeStats",
+                "nullable": true
+              },
+              "endpoints": {
+                "type": "object",
+                "description": "Per-endpoint stats, keyed by the grouped path (e.g. /api/floats).",
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ResponseTimeStats"
+                }
+              }
+            }
+          },
+          "usagePersistence": {
+            "type": "object",
+            "description": "Process-local health signal for failed atomic usage-accounting writes. Resets on restart.",
+            "properties": {
+              "failures": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "lastFailureAt": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "pendingReservations": {
+                "type": "integer",
+                "minimum": 0,
+                "nullable": true,
+                "description": "Durable usage reservations awaiting reconciliation; null only if the health query itself failed."
+              }
+            },
+            "required": [
+              "failures",
+              "lastFailureAt",
+              "pendingReservations"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "uptime",
+          "timestamp"
+        ]
+      },
+      "ResponseTimeStats": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer" },
+          "avgMs": { "type": "number" },
+          "p50Ms": { "type": "number" },
+          "p95Ms": { "type": "number" },
+          "maxMs": { "type": "number" }
+        },
+        "required": ["count", "avgMs", "p50Ms", "p95Ms", "maxMs"]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Correlation id present on 5xx responses."
+          },
+          "retryAfter": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Seconds to wait before retrying (on 429 responses)."
+          }
+        },
+        "required": [
+          "error"
+        ]
+      }
+    },
+    "responses": {
+      "IdempotencyConflict": {
+        "description": "The supplied `Idempotency-Key` was previously used with a different request body or query parameters. The response body's `code` is `idempotency_key_conflict`. Either retry the original request unchanged (in which case the cached response is replayed within the 24h TTL with `Idempotent-Replayed: true`) or pick a fresh key for the new request.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Idempotency-Key was reused with different request parameters. Use a new key for a new request.",
+              "code": "idempotency_key_conflict"
+            }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Invalid request (e.g. missing or out-of-range parameters).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "clientSeed is required"
+            }
+          }
+        }
+      },
+      "InvalidApiKey": {
+        "description": "An API key was supplied but is unknown or revoked. The response body's `code` is `invalid_api_key`. Omit the key to call anonymously.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "Invalid or revoked API key. Omit the key to call anonymously.", "code": "invalid_api_key" }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Too many requests. Anonymous calls are limited per IP; authenticated calls have per-account daily quotas.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Too many requests. Please slow down and try again shortly.",
+              "retryAfter": 30
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Unexpected server error.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Internal server error",
+              "requestId": "a1b2c3d4e5f60718"
+            }
+          }
+        }
+      }
+    }
+  }
+}

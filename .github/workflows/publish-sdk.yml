@@ -1,0 +1,61 @@
+name: Publish SDKs
+
+# Tags publish the SDKs in sdk/ (the core package keeps its own vX.Y.Z tags):
+#   sdk-vX.Y.Z   -> @provableio/sdk on npm   (version must match sdk/typescript/package.json)
+#   pysdk-vX.Y.Z -> provableio on PyPI       (version must match sdk/python/pyproject.toml)
+# Both registries use trusted publishing (OIDC): no tokens are stored.
+
+on:
+  push:
+    tags: ["sdk-v[0-9]+.[0-9]+.[0-9]+", "pysdk-v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  npm:
+    if: startsWith(github.ref_name, 'sdk-v')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Tag must match package.json
+        run: test "sdk-v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: npm ci
+      - run: npm run build
+      - name: Generated types match sdk/openapi.json
+        run: git diff --exit-code -- src/openapi-types.ts
+      - run: npm test
+      - run: npm publish --access public
+
+  pypi:
+    if: startsWith(github.ref_name, 'pysdk-v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    defaults:
+      run:
+        working-directory: sdk/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tag must match pyproject.toml
+        run: test "pysdk-v$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')" = "$GITHUB_REF_NAME"
+      - name: Generated models match sdk/openapi.json
+        run: |
+          python generate_models.py
+          git diff --exit-code -- src/provableio/models.py src/provableio/operations.py
+      - run: python -m pip install build pytest .
+      - run: pytest
+      - run: python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist/

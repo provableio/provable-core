@@ -20,3 +20,18 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn test
+
+  sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci && npm run build && git diff --exit-code -- src/openapi-types.ts && npm test
+        working-directory: sdk/typescript
+      - run: python generate_models.py && git diff --exit-code -- src/provableio && pip install pytest . && pytest
+        working-directory: sdk/python
