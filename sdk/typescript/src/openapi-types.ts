@@ -15,12 +15,15 @@ export interface paths {
         put?: never;
         /**
          * Run many draws in one round trip
-         * @description Accepts up to 50 independent draws across any of the random-generating endpoints (`floats`, `ints`, `shuffle`, `pick`, `bytes`, `dice`, `gaussian`) and returns one result per draw in the same order.
+         * @description **Requires an API key.** Anonymous calls get `401` with code `account_required` and a `signupUrl`.
+         *
+         *     Accepts up to 50 independent draws across any of the random-generating endpoints (`floats`, `ints`, `shuffle`, `pick`, `bytes`, `dice`, `gaussian`) and returns one result per draw in the same order.
          *
          *     - Each draw uses its own `clientSeed`/`cursor`/`nonce`, so any single outcome is independently verifiable via `/api/verifyServerHash` and gets its own `shortId`/`permalink`.
          *     - A failing draw is reported as `{ ok: false, error }` and does **not** abort the batch — successful draws still persist their outcomes.
          *     - Authenticated calls bump usage counters once per **successful** draw. If the daily quota is reached mid-batch, the remaining draws short-circuit with `{ ok: false, error: "…", code: "quota_exceeded" }` instead of running.
          *     - One `Idempotency-Key` covers the whole batch: a retry with the same key replays the identical `results` array and does not re-run any draw.
+         *     - Poisson `gaussian` draws in one batch may use at most 100,000 random floats in total (`count × max(50, 4·lambda + 50)` per draw); a heavier batch is refused with 400.
          */
         post: operations["batchDraw"];
         delete?: never;
@@ -61,8 +64,30 @@ export interface paths {
         /**
          * Commit a server seed (commit-reveal step 1)
          * @description Stronger fairness guarantee than `/api/floats` and `/api/ints`. The server generates a fresh `serverSeed`, publishes its `serverHash`, and holds the seed secret until you reveal. Because the hash is published *before* you submit your `clientSeed`, the server cannot pick its seed in response to yours. Follow with `POST /api/reveal` within the commit's TTL (default 10 minutes).
+         *
+         *     **Sealed commits** (`{"sealed": true, "label": "..."}`, live key required) back sessions that compute outcomes locally, like a game round: the response includes the secret `serverSeed`, returned only to the key that made the commit. There is one sealed commit per key and label, ever; calling again returns the same commit, seed included, so a restart can recover it. The commit is public on `GET /api/commits` from the moment it's made, its seed is published when you reveal it or automatically when it expires (7 days), and sealed commits are never deleted.
          */
         post: operations["createCommit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/commits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the sealed commits for a label
+         * @description Public, no key needed. Every sealed commit any key made for `label`, oldest first. Each key can make at most one per label, so this proves the owner didn't commit twice and keep the better seed. Seeds show once revealed or expired.
+         */
+        get: operations["listSealedCommits"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -406,7 +431,9 @@ export interface paths {
         };
         /**
          * Stream outcomes as Server-Sent Events
-         * @description Open a long-lived Server-Sent Events (SSE) connection that emits one verifiable outcome per `intervalMs`, up to a server-enforced 10-minute cap.
+         * @description **Requires an API key.** Anonymous calls get `401` with code `account_required` and a `signupUrl`.
+         *
+         *     Open a long-lived Server-Sent Events (SSE) connection that emits one verifiable outcome per `intervalMs`, up to a server-enforced 10-minute cap.
          *
          *     **The response shape differs from every other endpoint here.** Instead of returning a single JSON body, the server holds the connection open and writes a stream of `text/event-stream` frames. Each frame is a self-contained `event: outcome` message whose `data:` field is a full JSON outcome (identical shape to the matching non-streaming endpoint, plus an `outcomeId` of `clientSeed:cursor:nonce`). Every emitted outcome verifies independently via `/api/verifyServerHash`.
          *
@@ -452,9 +479,31 @@ export interface paths {
         };
         /**
          * Verify an outcome by shortId
-         * @description Public, no-auth verifier used by the `/verify` landing page. Given a `shortId` returned by any random-generating endpoint (or visible in an `/o/:id` permalink), returns recorded metadata and a server-computed verification verdict. Password-tool receipts never return the generated integers or derivation coordinates. A response is `verified: true` when either (a) the live seed state still carries the same `serverHash` or (b) the `serverSeed` has been revealed and `sha256(serverSeed)` reproduces the recorded `serverHash`.
+         * @description Public, no-auth verifier used by the `/verify` landing page. Given a `shortId` returned by any random-generating endpoint (or visible in an `/o/:id` permalink), returns recorded metadata and a server-computed verification verdict. Password-tool receipts never return the generated integers or derivation coordinates. `status` is `verified` only when the revealed `serverSeed` hashes to the committed `serverHash` and replaying the draw reproduces the recorded result; `committed` before the reveal; `revealed` when the seed checks out but the record can't be replayed server-side; otherwise `mismatch`. `verified` is true only for `status: verified`.
          */
         get: operations["verifyShortId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/o/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live feed of public draws (Server-Sent Events)
+         * @description Long-lived, no-auth `text/event-stream` connection that pushes every public live draw the moment it is made, from every caller (anonymous and keyed). Each frame is `event: draw` with `id:` set to the draw's `shortId` and a JSON `data:` field: `shortId`, `label` (endpoint, plus the range for ints), `result` (a short rendering of the values), `clientSeed`, `nonce` and `created` (ISO 8601). Open `/o/{id}` for the full record and its verification. Test-mode draws and password-tool results are never sent.
+         *
+         *     No history is replayed: read `/o.json` for the latest 8 draws, then follow this stream. Heartbeat comments (`: heartbeat …`) arrive every ~15 seconds, and the server ends each connection after 5 minutes; `EventSource` reconnects on its own (`retry: 5000`). A 204 means the feed is at capacity (20 connections per IP, 1,000 in total).
+         */
+        get: operations["streamPublicDraws"];
         put?: never;
         post?: never;
         delete?: never;
@@ -706,6 +755,46 @@ export interface components {
              * @description Unix timestamp in ms after which the commit is no longer revealable.
              */
             expiresAt: number;
+            /** @description Sealed commits only: the secret seed, returned to the owning key. Keep it private until you reveal. */
+            serverSeed?: string;
+            /** @description Sealed commits only. */
+            label?: string;
+            /** @description Present and `true` on sealed commits. */
+            sealed?: boolean;
+            /**
+             * Format: int64
+             * @description Sealed commits only: Unix ms when the commit was made.
+             */
+            created?: number;
+            /**
+             * Format: int64
+             * @description Sealed commits only: Unix ms of the reveal, or null.
+             */
+            revealedAt?: number | null;
+        };
+        /** @description The public record of a sealed commit. */
+        SealedCommit: {
+            /** Format: uuid */
+            commitId: string;
+            /**
+             * Format: uuid
+             * @description Public id of the API key that made the commit (not the key itself).
+             */
+            keyId: string;
+            label: string;
+            /** @description SHA-256 of the seed, public from the moment of the commit. */
+            serverHash: string;
+            /** @description Null until the commit is revealed or expires. */
+            serverSeed: string | null;
+            /** Format: int64 */
+            created: number;
+            /** Format: int64 */
+            expiresAt: number;
+            /**
+             * Format: int64
+             * @description Unix ms of the reveal, or null.
+             */
+            revealedAt: number | null;
         };
         RevealRequest: {
             /**
@@ -1002,7 +1091,7 @@ export interface components {
         };
     };
     parameters: {
-        /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+        /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
         ClientSeed: string;
         /** @description Number of values to generate (1-100). */
         Count: number;
@@ -1170,7 +1259,7 @@ export interface operations {
     getBytes: {
         parameters: {
             query?: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /** @description Number of bytes to generate (1-1024). */
                 count?: number;
@@ -1226,7 +1315,22 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "sealed": true,
+                 *       "label": "mygame:round:42"
+                 *     }
+                 */
+                "application/json": {
+                    /** @description Make a sealed commit. Requires a live (`pk_live_*`) API key and `label`. */
+                    sealed?: boolean;
+                    /** @description What the commit is for, e.g. `mygame:round:42`. Only with `sealed`; unique per key. */
+                    label?: string;
+                };
+            };
+        };
         responses: {
             /** @description A new commit. Save `commitId` and `serverHash` for verification, then call `/api/reveal`. */
             200: {
@@ -1245,7 +1349,51 @@ export interface operations {
                     "application/json": components["schemas"]["Commit"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["InvalidApiKey"];
+            /** @description A `pk_test_*` key asked for a sealed commit. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": "sealed commits need a live (pk_live_*) api key",
+                     *       "code": "test_mode_forbidden"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    listSealedCommits: {
+        parameters: {
+            query: {
+                /** @example mygame:round:42 */
+                label: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sealed commits for the label, oldest first. */
+            200: {
+                headers: {
+                    "Server-Timing": components["headers"]["ServerTiming"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SealedCommit"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["ServerError"];
         };
@@ -1253,10 +1401,10 @@ export interface operations {
     rollDice: {
         parameters: {
             query: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /**
-                 * @description Dice notation `NdM`, `NdM+K`, or `NdM-K`. N: 1-100 dice. M: 2-1,000,000 sides. K: integer modifier added to the total. Examples: `3d6`, `2d20+5`, `1d100-10`.
+                 * @description Dice notation `NdM`, `NdM+K`, or `NdM-K`. N: 1-100 dice. M: 2-1,000,000 sides. K: integer modifier added to the total, at most 1,000,000 either way. Examples: `3d6`, `2d20+5`, `1d100-10`.
                  * @example 3d6+2
                  */
                 notation: string;
@@ -1316,7 +1464,7 @@ export interface operations {
     getFloats: {
         parameters: {
             query?: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /** @description Number of values to generate (1-100). */
                 count?: components["parameters"]["Count"];
@@ -1373,15 +1521,15 @@ export interface operations {
     gaussian: {
         parameters: {
             query?: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /** @description Number of values to generate (1-100). */
                 count?: components["parameters"]["Count"];
                 /** @description Which distribution to sample. */
                 distribution?: "normal" | "exponential" | "poisson";
-                /** @description Mean (μ) for `normal`. Defaults to 0. */
+                /** @description Mean (μ) for `normal`, between -1e12 and 1e12. Defaults to 0. */
                 mean?: number;
-                /** @description Standard deviation (σ) for `normal`. Must be > 0. Defaults to 1. */
+                /** @description Standard deviation (σ) for `normal`. Must be > 0 and at most 1e12. Defaults to 1. */
                 stddev?: number;
                 /** @description Rate parameter (λ) for `exponential` (> 0) or `poisson` (> 0, ≤ 100). Defaults to 1. */
                 lambda?: number;
@@ -1502,7 +1650,7 @@ export interface operations {
     incrementCursor: {
         parameters: {
             query?: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
             };
             header?: never;
@@ -1549,7 +1697,7 @@ export interface operations {
     getInts: {
         parameters: {
             query?: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /** @description Number of values to generate (1-100). */
                 count?: components["parameters"]["Count"];
@@ -1614,7 +1762,7 @@ export interface operations {
     listOutcomes: {
         parameters: {
             query?: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /** @description Max outcomes to return (1-1000, default 1000). */
                 limit?: number;
@@ -1833,7 +1981,7 @@ export interface operations {
     getOutcome: {
         parameters: {
             query: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /**
                  * @description Cursor of the outcome to look up.
@@ -1894,10 +2042,10 @@ export interface operations {
     pickItem: {
         parameters: {
             query: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /**
-                 * @description Items to choose from. Same encoding as `/api/shuffle`. 1-1000 entries.
+                 * @description Items to choose from. Same encoding and limits as `/api/shuffle`. 1-1000 entries.
                  * @example common,rare,legendary
                  */
                 items: string | string[];
@@ -2179,10 +2327,10 @@ export interface operations {
     shuffleItems: {
         parameters: {
             query: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /**
-                 * @description Items to shuffle. Pass a JSON array (`items=["a","b","c"]`), a comma-separated list (`items=a,b,c`), or repeat the parameter (`items=a&items=b&items=c`). 1-1000 entries.
+                 * @description Items to shuffle. Pass a JSON array (`items=["a","b","c"]`), a comma-separated list (`items=a,b,c`), or repeat the parameter (`items=a&items=b&items=c`). 1-1000 entries, each a string or number of at most 256 characters, 32 KB in total.
                  * @example a,b,c,d
                  */
                 items: string | string[];
@@ -2238,7 +2386,7 @@ export interface operations {
     streamOutcomes: {
         parameters: {
             query: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /**
                  * @description Which generator to stream.
@@ -2293,7 +2441,7 @@ export interface operations {
     verifyServerHash: {
         parameters: {
             query: {
-                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. */
+                /** @description Your seed for this generation. Combined with the server seed to produce provably fair output. Defaults to the literal string `"test"` when omitted, so anonymous demos work out of the box — production callers should always pass a stable, caller-owned value (your account id, a session id, etc.) to keep their own deterministic seed history. At most 256 characters. */
                 clientSeed?: components["parameters"]["ClientSeed"];
                 /**
                  * @description The server hash returned with the original outcome.
@@ -2364,8 +2512,9 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "verified": true,
-                     *       "reason": "Server seed hash on file matches the current state for this client seed.",
+                     *       "verified": false,
+                     *       "status": "committed",
+                     *       "reason": "The serverHash was on file before this draw. The result can be replayed once the server seed is revealed by rotating the client seed.",
                      *       "shortId": "k7Qm2A9bXz",
                      *       "clientSeed": "my-app",
                      *       "serverHash": "9f86d081884c7d65...",
@@ -2378,10 +2527,14 @@ export interface operations {
                      */
                     "application/json": {
                         verified: boolean;
+                        /** @enum {string} */
+                        status?: "verified" | "committed" | "revealed" | "mismatch";
                         reason: string;
                         shortId: string;
                         clientSeed?: string | null;
                         serverHash?: string;
+                        /** @description The revealed server seed, or null until the client seed is rotated. */
+                        serverSeed?: string | null;
                         cursor?: number | null;
                         nonce?: number | null;
                         endpoint?: string | null;
@@ -2407,6 +2560,38 @@ export interface operations {
             404: components["responses"]["BadRequest"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["ServerError"];
+        };
+    };
+    streamPublicDraws: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Event stream of public draws. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example event: draw
+                     *     id: k7Qm2A9bXz
+                     *     data: {"shortId":"k7Qm2A9bXz","label":"ints 1–100","result":"57","clientSeed":"player-42","nonce":18,"created":"2026-11-09T22:41:07.512Z"}
+                     */
+                    "text/event-stream": string;
+                };
+            };
+            /** @description The feed is at capacity; poll /o.json instead. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getOutcomePermalink: {

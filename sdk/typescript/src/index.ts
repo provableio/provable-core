@@ -289,6 +289,17 @@ export class ProvableClient {
     });
   }
 
+  /** Public sealed commits under a label (GET /api/commits). */
+  listSealedCommits(
+    query: Query<OpGet<"/api/commits">>,
+    opts?: RequestOptions,
+  ): Promise<ApiResult<OkResponse<OpGet<"/api/commits">>>> {
+    return this.request("GET", "/api/commits", {
+      query: query as Record<string, unknown>,
+      ...opts,
+    });
+  }
+
   getOutcomePermalink(
     pathParams: PathParams<OpGet<"/o/{id}">>,
     opts?: RequestOptions,
@@ -381,11 +392,34 @@ export class ProvableClient {
     headers.set("Accept", "text/event-stream");
     if (opts.lastEventId) headers.set("Last-Event-ID", opts.lastEventId);
 
-    const response = await this.fetchImpl(url, {
-      method: "GET",
-      headers,
-      signal: opts.signal,
-    });
+    for await (const ev of this.sse(url, headers, opts.signal)) yield ev.data;
+  }
+
+  /**
+   * Every public draw as it is made (GET /o/stream on provable.io; the API
+   * host redirects there). No history is replayed: read `/o.json` for the
+   * latest 8. The server ends each connection after 5 minutes, so loop.
+   *
+   * @example
+   * ```ts
+   * for await (const draw of client.streamPublicDraws()) console.log(draw);
+   * ```
+   */
+  async *streamPublicDraws(opts: RequestOptions = {}): AsyncGenerator<unknown, void, void> {
+    const headers = this.buildHeaders(opts.headers);
+    headers.set("Accept", "text/event-stream");
+    for await (const ev of this.sse(this.baseUrl + "/o/stream", headers, opts.signal)) {
+      if (ev.event === "draw") yield ev.data;
+    }
+  }
+
+  /** Parsed `{ event, data }` frames of a text/event-stream response. */
+  private async *sse(
+    url: string,
+    headers: Headers,
+    signal?: AbortSignal,
+  ): AsyncGenerator<{ event: string; data: unknown }, void, void> {
+    const response = await this.fetchImpl(url, { method: "GET", headers, signal });
     if (!response.ok || !response.body) {
       throw new Error(`Stream failed: HTTP ${response.status}`);
     }
@@ -402,17 +436,21 @@ export class ProvableClient {
         while ((idx = buf.indexOf("\n\n")) !== -1) {
           const raw = buf.slice(0, idx);
           buf = buf.slice(idx + 2);
-          const dataLines = raw
-            .split("\n")
+          const lines = raw.split("\n");
+          const dataLines = lines
             .filter((l) => l.startsWith("data:"))
             .map((l) => l.slice(5).trimStart());
           if (dataLines.length === 0) continue;
+          const eventLine = lines.find((l) => l.startsWith("event:"));
+          const event = eventLine ? eventLine.slice(6).trim() : "message";
           const dataStr = dataLines.join("\n");
+          let data: unknown = dataStr;
           try {
-            yield JSON.parse(dataStr);
+            data = JSON.parse(dataStr);
           } catch {
-            yield dataStr;
+            /* not JSON: pass the text through */
           }
+          yield { event, data };
         }
       }
     } finally {

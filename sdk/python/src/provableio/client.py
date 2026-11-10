@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Generic, Iterator, Mapping, Optional, TypedDict, TypeVar, Union
+from typing import Any, Dict, Generic, Iterator, List, Mapping, Optional, Tuple, TypedDict, TypeVar, Union
 try:
     from typing import Unpack
 except ImportError:
@@ -68,7 +68,7 @@ class ProvableClient:
             auth_headers["Authorization"] = f"Bearer {bearer_token}"
         self.base_url = base_url.rstrip("/")
         self._owns_client = http_client is None
-        self._client = http_client or httpx.Client(headers=auth_headers, timeout=timeout)
+        self._client = http_client or httpx.Client(headers=auth_headers, timeout=timeout, follow_redirects=True)
         self._headers = auth_headers
 
     def close(self) -> None:
@@ -193,6 +193,9 @@ class ProvableClient:
     def list_outcomes(self, query: Optional[models.ListOutcomesParams] = None, **options: Unpack[RequestOptions]) -> ApiResult[models.ListOutcomesResponse]:
         return self._operation("listOutcomes", query=query, options=options)
 
+    def list_sealed_commits(self, query: Optional[models.ListSealedCommitsParams] = None, **options: Unpack[RequestOptions]) -> ApiResult[models.ListSealedCommitsResponse]:
+        return self._operation("listSealedCommits", query=query, options=options)
+
     def list_merkle_roots(self, query: Optional[models.ListMerkleRootsParams] = None, **options: Unpack[RequestOptions]) -> ApiResult[models.ListMerkleRootsResponse]:
         return self._operation("listMerkleRoots", query=query, options=options)
 
@@ -237,18 +240,37 @@ class ProvableClient:
             operation["method"], self.base_url + operation["path"], params=query, headers=stream_headers,
         ) as response:
             response.raise_for_status()
+            for event_name, data in _sse_events(response):
+                if event_name == "done":
+                    return
+                if event_name in ("message", "outcome"):
+                    yield json.loads(data)
+
+    def stream_public_draws(self, *, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every public draw as it is made (GET /o/stream on provable.io; the API host redirects there).
+
+        No history is replayed: read /o.json for the latest 8. The server ends each
+        connection after 5 minutes, so call this in a loop to keep following.
+        """
+        operation = OPERATIONS["streamPublicDraws"]
+        stream_headers = {**self._headers, **dict(headers or {}), "Accept": "text/event-stream"}
+        with self._client.stream(operation["method"], self.base_url + operation["path"], headers=stream_headers) as response:
+            response.raise_for_status()
+            for event_name, data in _sse_events(response):
+                if event_name == "draw":
+                    yield json.loads(data)
+
+
+def _sse_events(response: httpx.Response) -> Iterator[Tuple[str, str]]:
+    """(event, data) pairs from a text/event-stream response."""
+    data_lines: List[str] = []
+    event_name = "message"
+    for line in response.iter_lines():
+        if line.startswith("event:"):
+            event_name = line[6:].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[5:].lstrip())
+        elif not line and data_lines:
+            yield event_name, "\n".join(data_lines)
             data_lines = []
             event_name = "message"
-            for line in response.iter_lines():
-                if line.startswith("event:"):
-                    event_name = line[6:].strip()
-                elif line.startswith("data:"):
-                    data_lines.append(line[5:].lstrip())
-                elif not line and data_lines:
-                    data = "\n".join(data_lines)
-                    data_lines = []
-                    if event_name == "done":
-                        return
-                    if event_name in ("message", "outcome"):
-                        yield json.loads(data)
-                    event_name = "message"
