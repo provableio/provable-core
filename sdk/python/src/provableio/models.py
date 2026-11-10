@@ -82,6 +82,21 @@ class Commit(TypedDict, total=False):
     commitId: Required[str]
     serverHash: Required[str]
     expiresAt: Required[int]
+    serverSeed: str
+    label: str
+    sealed: bool
+    created: int
+    revealedAt: int
+
+class SealedCommit(TypedDict, total=False):
+    commitId: Required[str]
+    keyId: Required[str]
+    label: Required[str]
+    serverHash: Required[str]
+    serverSeed: Required[str]
+    created: Required[int]
+    expiresAt: Required[int]
+    revealedAt: Required[int]
 
 class RevealRequest(TypedDict, total=False):
     commitId: Required[str]
@@ -251,7 +266,17 @@ class GetBytesParams(TypedDict, total=False):
 
 GetBytesResponse = BytesOutcome
 
+class CreateCommitBody(TypedDict, total=False):
+    sealed: bool
+    label: str
+
 CreateCommitResponse = Commit
+
+class ListSealedCommitsParams(TypedDict, total=False):
+    label: Required[str]
+    limit: int
+
+ListSealedCommitsResponse = List[SealedCommit]
 
 class RollDiceParams(TypedDict, total=False):
     clientSeed: str
@@ -372,10 +397,12 @@ class VerifyShortIdParams(TypedDict, total=False):
 
 class VerifyShortIdResponse(TypedDict, total=False):
     verified: Required[bool]
+    status: Literal['verified', 'committed', 'revealed', 'mismatch']
     reason: Required[str]
     shortId: Required[str]
     clientSeed: str
     serverHash: str
+    serverSeed: str
     cursor: int
     nonce: int
     endpoint: str
@@ -388,6 +415,8 @@ class VerifyShortIdResponse(TypedDict, total=False):
     created: int
     redacted: bool
     permalink: str
+
+StreamPublicDrawsResponse = str
 
 class GetOutcomePermalinkParams(TypedDict, total=False):
     id: Required[str]
