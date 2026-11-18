@@ -225,6 +225,11 @@ class ProvableClient:
             "getOutcomeOgImage", path_params={"id": outcome_id}, options=options,
         )
 
+    def get_outcome_badge(self, outcome_id: str, **options: Unpack[RequestOptions]) -> ApiResult[models.GetOutcomeBadgeResponse]:
+        return self._operation(
+            "getOutcomeBadge", path_params={"id": outcome_id}, options=options,
+        )
+
     def stream_outcomes(
         self,
         query: models.StreamOutcomesParams,

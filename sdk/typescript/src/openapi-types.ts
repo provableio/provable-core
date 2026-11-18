@@ -552,6 +552,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/o/{id}/badge.svg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Embeddable status badge for an outcome
+         * @description Returns a small SVG badge ("Provable.io | Verified · {id}") showing the outcome's verification status: Verified, Committed, Seed revealed or Mismatch. Meant for a customer's own results or winners page, wrapped in a link to `/o/{id}`. Sets `Cross-Origin-Resource-Policy: cross-origin` and no cookies so it loads from any site. Responses are cached (5 minutes).
+         */
+        get: operations["getOutcomeBadge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2652,6 +2672,41 @@ export interface operations {
                 content: {
                     "image/png": string;
                     "image/jpeg": string;
+                };
+            };
+        };
+    };
+    getOutcomeBadge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description The `shortId` returned with the outcome (~10 alphanumeric characters).
+                 * @example k7Qm2A9bXz
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SVG badge. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/svg+xml": string;
+                };
+            };
+            /** @description Unknown shortId: an SVG badge reading "Draw not found". */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/svg+xml": string;
                 };
             };
         };

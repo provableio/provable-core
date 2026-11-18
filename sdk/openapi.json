@@ -2237,6 +2237,54 @@
           }
         }
       }
+    },
+    "/o/{id}/badge.svg": {
+      "get": {
+        "tags": [
+          "Verification"
+        ],
+        "summary": "Embeddable status badge for an outcome",
+        "description": "Returns a small SVG badge (\"Provable.io | Verified · {id}\") showing the outcome's verification status: Verified, Committed, Seed revealed or Mismatch. Meant for a customer's own results or winners page, wrapped in a link to `/o/{id}`. Sets `Cross-Origin-Resource-Policy: cross-origin` and no cookies so it loads from any site. Responses are cached (5 minutes).",
+        "operationId": "getOutcomeBadge",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The `shortId` returned with the outcome (~10 alphanumeric characters).",
+            "example": "k7Qm2A9bXz",
+            "schema": {
+              "type": "string",
+              "minLength": 4,
+              "maxLength": 32,
+              "pattern": "^[A-Za-z0-9]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SVG badge.",
+            "content": {
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown shortId: an SVG badge reading \"Draw not found\".",
+            "content": {
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
