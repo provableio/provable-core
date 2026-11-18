@@ -428,3 +428,8 @@ class GetOutcomeOgImageParams(TypedDict, total=False):
 
 GetOutcomeOgImageResponse = bytes
 
+class GetOutcomeBadgeParams(TypedDict, total=False):
+    id: Required[str]
+
+GetOutcomeBadgeResponse = str
+

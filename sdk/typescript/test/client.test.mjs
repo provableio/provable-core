@@ -114,7 +114,7 @@ test("every JSON operation in openapi.json has a client method", async () => {
   const { readFile } = await import("node:fs/promises");
   const spec = JSON.parse(await readFile(new URL("../../openapi.json", import.meta.url), "utf8"));
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
-  // og.png is an image for social cards, not an API call
-  const missing = Object.keys(spec.paths).filter((p) => !p.endsWith("/og.png") && !src.includes(`"${p}"`));
+  // og.png and badge.svg are images, not API calls
+  const missing = Object.keys(spec.paths).filter((p) => !/\/(og\.png|badge\.svg)$/.test(p) && !src.includes(`"${p}"`));
   assert.deepEqual(missing, []);
 });
